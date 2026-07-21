@@ -37,3 +37,21 @@ At deep recursion ServerMaxMoney rounds to near-zero, so `optimizePerformanceMet
 ## credits
 
 Alain Bryden wrote all the hard code. This fork exists because his scripts are worth building on.
+
+## on ram optimization
+
+Alain's code is already highly optimized. There isn't much to cut.
+
+Key patterns he uses that save RAM:
+
+- **`getNsDataThroughFile`** — runs expensive ns calls on remote servers instead of home. The ns API charges RAM based on which script calls it, so a 1.6GB throwaway script on n00dles is cheaper than adding that cost to daemon.js. Most data reads (player info, server stats, source files) use this.
+
+- **`arbitraryExecution`** — distributes hack/grow/weaken threads across all rooted servers sorted by free RAM. Not just home. At deep BN12 the daemon uses 2.24TB of network RAM, not 64GB of home RAM.
+
+- **`launchScriptHelper`** — only starts scripts when there's enough RAM. Checks minRamReq, kills lower-priority scripts if needed, and copies dependencies to remote hosts automatically.
+
+- **`optimizePerformanceMetrics`** — binary-searches the optimal steal percentage for each target given current network RAM. At normal scale this is essential. At BN12-333 it always converges to 0% (server money rounds to nothing) and the 1000-iteration loop becomes cosmetic noise.
+
+Most of the daemon's RAM cost is the source code itself (2.6GB), not what it launches. The helpers.js library is shared across all scripts so the import cost amortizes. Cutting individual helper functions from helpers.js saves almost nothing in practice — Bitburner charges RAM based on source character count, not import scope.
+
+The bottom line: if it seems like the daemon should be leaner, it probably can't be. Alain already did that work. The fork's goal is to add BN12-15 awareness and skip scripts that are mathematically dead at scale, not to shrink the core engine.
