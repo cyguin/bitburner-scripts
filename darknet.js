@@ -22,12 +22,13 @@ const argsSchema = [
 export function autocomplete(data, args) { data.flags(argsSchema); return []; }
 
 export async function main(ns) {
+    try {
     const opts = getConfiguration(ns, argsSchema);
     const reserve = opts.reserve !== null ? parseFloat(opts.reserve) : 0;
-    // Darknet access gated by autopilot (SF15 or BN15)
-    if (!ns.darknet) {
-        return;
-    }
+
+    let dnet;
+    try { dnet = ns.dnet; } catch { ns.print('darknet API unavailable'); return; }
+    if (!dnet) { ns.print('darknet API unavailable'); return; }
 
     log(ns, `darknet.js starting`);
 
@@ -69,16 +70,16 @@ export async function main(ns) {
 
     while (true) {
         try {
-            await tick(ns, opts, reserve);
+            await tick(ns, opts, reserve, dnet);
         } catch (e) {
             log(ns, `Error: ${getErrorInfo(e)}`);
         }
         await ns.sleep(opts.interval);
     }
+    } catch (e) { ns.print(`darknet.js crash: ${e?.message || e}`); }
 }
 
-async function tick(ns, opts, reserve) {
-    const dnet = ns.dnet;
+async function tick(ns, opts, reserve, dnet) {
     let server = ns.getHostname();
 
     if (!dnet.isDarknetServer(server)) {
