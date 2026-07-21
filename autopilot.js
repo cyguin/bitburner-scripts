@@ -457,10 +457,15 @@ export async function main(ns) {
         pid = launchScriptHelper(ns, '/Tasks/crack-host.js', ['w0r1d_d43m0n']);
         if (pid) await waitForProcessToComplete(ns, pid);
 
-        // Use the new special singularity function to automate entering a new BN
-        pid = await runCommand(ns, `ns.singularity.destroyW0r1dD43m0n(ns.args[0], ns.args[1]` +
-            `, { sourceFileOverrides: new Map() }` + // Work around a long-standing bug on bitburner-official.github.io TODO: Remove when no longer needed
-            `)`, '/Temp/singularity-destroyW0r1dD43m0n.js', [nextBn, ns.getScriptName()]);
+        // BN12: installAugmentations stays in the recursion loop
+        if (resetInfo.currentNode == 12) {
+            pid = await runCommand(ns, `ns.singularity.installAugmentations(ns.args[0])`,
+                '/Temp/singularity-install-augs.js', [`BN12-${(dictOwnedSourceFiles[12] || 0) + 1}`]);
+        } else {
+            pid = await runCommand(ns, `ns.singularity.destroyW0r1dD43m0n(ns.args[0], ns.args[1]` +
+                `, { sourceFileOverrides: new Map() }` +
+                `)`, '/Temp/singularity-destroyW0r1dD43m0n.js', [nextBn, ns.getScriptName()]);
+        }
         if (pid) {
             log(ns, `SUCCESS: Initiated process ${pid} to execute 'singularity.destroyW0r1dD43m0n' with args: [${nextBn}, ${ns.getScriptName()}]`, true, 'success')
             await waitForProcessToComplete(ns, pid);
@@ -606,8 +611,8 @@ export async function main(ns) {
             } else { // XP-ONLY MODE: We can shift daemon.js to this when we want to prioritize earning hack exp rather than money
                 // Only do this if we aren't in --looping mode because TODO: currently it does not kill it's loops on shutdown, so they'd be stuck in hack exp mode
                 let useXpOnlyMode = prioritizeHackForDaedalus || prioritizeHackForWd ||
-                    // In BNs that give no money for hacking, always start daemon.js in this mode (except BN8, because TODO: --xp-only doesn't handle stock manipulation)
-                    (bitNodeMults.ScriptHackMoney * bitNodeMults.ScriptHackMoneyGain == 0 && resetInfo.currentNode != 8);
+                    (bitNodeMults.ScriptHackMoney * bitNodeMults.ScriptHackMoneyGain == 0 && resetInfo.currentNode != 8) ||
+                    resetInfo.currentNode == 12;
                 if (!useXpOnlyMode) { // Otherwise, respect the configured interval / duration
                     const xpInterval = Number(options['xp-mode-interval-minutes']);
                     const xpDuration = Number(options['xp-mode-duration-minutes']);
@@ -846,8 +851,9 @@ export async function main(ns) {
         // pefoming an ascention in a slow-going BN will let us lock in bonuses that will speed up overall pogression.
         let reducedAugReq = Math.floor(options['reduced-aug-requirement-per-hour'] * getTimeInAug() / 3.6E6);
         // In our first BN9 augmentation and in BN8, use this mechanic to actually *increase* aug count requirements.
-        if (inFirstBn9Aug || resetInfo.currentNode == 8) // In BN8, no reset bonuses are possible, and we'd lose our stock progress
-            reducedAugReq = -2; // In our first BN9 augmentation, delay resetting as we'd lose our boosted hacknet server
+        if (inFirstBn9Aug || resetInfo.currentNode == 8)
+            reducedAugReq = -2;
+        if (resetInfo.currentNode == 12) reducedAugReq = options['install-at-aug-count'];
         // Collect additional information about how many augmentations we need before it's worth resetting, based on the current configuration
         const sf11Level = dictOwnedSourceFiles[11] ?? 0; // SF11 makes augs scale cheaper, so for each level, require +1 augs
         const augsNeeded = Math.max(1, options['install-at-aug-count'] + sf11Level - reducedAugReq);

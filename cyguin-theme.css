@@ -1,0 +1,28 @@
+/* cyguin dark theme
+   bg: #0a0d17  accent: #f5c518  surface: #0d1121  muted: #555966 */
+
+:root { --bg:#0a0d17; --accent:#f5c518; --surface:#0d1121; --text:#fff; --muted:#555966; }
+
+body { background:var(--bg)!important; color:var(--text)!important; }
+
+.MuiButton-containedPrimary, .MuiButton-contained {
+  background:var(--accent)!important; color:var(--bg)!important; border:none!important;
+}
+.MuiButton-containedPrimary:hover { background:#fad44d!important; }
+.MuiButton-outlined { border-color:var(--accent)!important; color:var(--accent)!important; }
+
+.MuiPaper-root, .MuiCard-root, [class*="sidebar"], [class*="panel"] {
+  background:var(--surface)!important; border-color:#1a1f33!important;
+}
+
+a, .MuiLink-root { color:var(--accent)!important; }
+a:hover { color:#fad44d!important; }
+
+.MuiInputBase-root, input, textarea { background:var(--surface)!important; color:var(--text)!important; }
+
+h1,h2,h3,h4,h5,h6 { color:var(--text)!important; }
+
+.MuiTypography-colorTextSecondary, [class*="muted"] { color:var(--muted)!important; }
+
+::-webkit-scrollbar-thumb { background:#1a1f33!important; }
+::-webkit-scrollbar-track { background:var(--bg)!important; }
