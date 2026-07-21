@@ -149,6 +149,12 @@ export async function main(ns) {
     async function startUp(ns) {
         await persistConfigChanges(ns);
 
+        // Check if casino already completed this session
+        try {
+            const done = JSON.parse(ns.read('/data/casino-done.txt'));
+            if (done?.resetId === (ns.getResetInfo?.().lastAugReset ?? 0)) ranCasino = true;
+        } catch {}
+
         // Collect and cache some one-time data
         resetInfo = await getNsDataThroughFile(ns, 'ns.getResetInfo()');
         bitNodeMults = await tryGetBitNodeMultipliers(ns);
