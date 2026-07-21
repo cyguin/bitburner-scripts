@@ -7,9 +7,10 @@ export async function main(ns) {
     while (true) {
         try {
             const server = ns.getHostname();
-            for (const f of ns.ls(server).filter(f => f.endsWith('.cache'))) {
+            // Open caches
+            for (const f of ns.ls(server).filter(f => f.endsWith('.cache')))
                 try { await dnet.openCache(f, true); } catch {}
-            }
+            // Phishing loop
             try { await dnet.phishingAttack(); } catch {}
         } catch {}
         await ns.sleep(15000);
