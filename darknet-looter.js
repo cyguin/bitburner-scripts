@@ -1,10 +1,17 @@
 export async function main(ns) {
+    ns.disableLog('ALL');
+    let dnet;
+    try { dnet = ns.dnet; } catch { return; }
+    if (!dnet || !dnet.isDarknetServer(ns.getHostname())) return;
+
     while (true) {
-        for (const f of ns.ls(ns.getHostname(), ".cache")) {
-            try { await ns.dnet.openCache(f); } catch {}
-        }
-        try { await ns.dnet.phishingAttack(); } catch {}
-        try { await ns.dnet.memoryReallocation(); } catch {}
+        try {
+            const server = ns.getHostname();
+            for (const f of ns.ls(server).filter(f => f.endsWith('.cache'))) {
+                try { await dnet.openCache(f, true); } catch {}
+            }
+            try { await dnet.phishingAttack(); } catch {}
+        } catch {}
         await ns.sleep(15000);
     }
 }
