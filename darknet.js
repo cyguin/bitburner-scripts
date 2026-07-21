@@ -21,7 +21,9 @@ const argsSchema = [
 
 export function autocomplete(data, args) { data.flags(argsSchema); return []; }
 
+export async function main(ns) {
     const opts = getConfiguration(ns, argsSchema);
+    const reserve = opts.reserve !== null ? parseFloat(opts.reserve) : 0;
     // Darknet access gated by autopilot (SF15 or BN15)
     if (!ns.darknet) {
         return;
