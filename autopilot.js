@@ -545,7 +545,6 @@ export async function main(ns) {
         if (15 in unlockedSFs || resetInfo.currentNode == 15) {
             if (!findScript('darknet.js')) launchScriptHelper(ns, 'darknet.js');
             if (!findScript('darknet-virus.js')) launchScriptHelper(ns, 'darknet-virus.js');
-            if (!findScript('labyrinth.js')) launchScriptHelper(ns, 'labyrinth.js');
         }
         if (resetInfo.currentNode == 15 && !findScript('bn15-sidecar.js'))
             launchScriptHelper(ns, 'bn15-sidecar.js');
