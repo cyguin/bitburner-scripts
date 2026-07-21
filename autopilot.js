@@ -27,7 +27,7 @@ const argsSchema = [ // The set of all command line arguments
     ['on-completion-script-args', []], // Optional args to pass to the script when we defeat the bitnode
     ['xp-mode-interval-minutes', 55], // Every time this many minutes has elapsed, toggle daemon.js to runing in --xp-only mode, which prioritizes earning hack-exp rather than money
     ['xp-mode-duration-minutes', 5], // The number of minutes to keep daemon.js in --xp-only mode before switching back to normal money-earning mode.
-    ['no-tail-windows', false], // Set to true to prevent the default behaviour of opening a tail window for certain launched scripts. (Doesn't affect scripts that open their own tail windows)
+    ['no-tail-windows', true], // Headless by default. Set to false to re-enable.
 ];
 
 export function autocomplete(data, args) {
