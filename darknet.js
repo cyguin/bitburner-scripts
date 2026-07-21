@@ -1,5 +1,4 @@
-import { getConfiguration, hasDarknetAccess } from './state.js'
-import { log as _log, getErrorInfo } from './async.js'
+import { getConfiguration, log, getErrorInfo } from './helpers.js'
 import { getCandidates } from './crackers.js'
 
 const argsSchema = [
@@ -22,20 +21,13 @@ const argsSchema = [
 
 export function autocomplete(data, args) { data.flags(argsSchema); return []; }
 
-const log = (ns, msg) => _log(ns, msg);
-const tlog = (ns, msg) => _log(ns, msg, true);
-
-export async function main(ns) {
     const opts = getConfiguration(ns, argsSchema);
-    if (opts.tail) ns.ui.openTail();
-    const reserve = opts.reserve !== null ? parseFloat(opts.reserve) : 0;
-
-    if (!hasDarknetAccess(ns)) {
-        tlog(ns, `BN15 dnet API not available. Need SF15.1, BN15, or DarkscapeNavigator.exe`);
+    // Darknet access gated by autopilot (SF15 or BN15)
+    if (!ns.darknet) {
         return;
     }
 
-    tlog(ns, `darknet.js starting`);
+    log(ns, `darknet.js starting`);
 
     const HOME = 'home';
     let knownServers = {}; // hostname -> { password, depth, modelId, session, lastSeen }
