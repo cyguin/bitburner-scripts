@@ -659,6 +659,11 @@ export async function main(ns) {
                 daemonArgs.push('--disable-script', getFilePath('/Tasks/contractor.js'));
                 daemonArgs.push('--disable-script', getFilePath('/Tasks/deploy-scripts.js'));
             }
+            // BN15: bladeburner is crippled (0.2x rank, 3x skill cost). Corporation is dead (0.2x valuation).
+            if (resetInfo.currentNode == 15) {
+                daemonArgs.push('--disable-script', getFilePath('bladeburner.js'));
+                daemonArgs.push('--disable-script', getFilePath('host-manager.js'));
+            }
             // In BN8, always run in a mode that prioritizes stock market manipulation
             if (resetInfo.currentNode == 8) daemonArgs.push("--stock-manipulation-focus");
             // Don't run the script to join and manage bladeburner if it is explicitly disabled
