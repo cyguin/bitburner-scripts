@@ -14,7 +14,7 @@ run theme.js
 
 - BN12 autopilot: installs augments instead of destroying, daemon XP-only, 1-aug threshold
 - Headless by default (no tail windows)
-- Cyguin dark theme: `cyguin-theme.json` for Theme Editor, `theme.js` for DOM override
+- Cyguin dark theme: `theme.js` injects CSS into the game DOM
 
 ## credits
 
