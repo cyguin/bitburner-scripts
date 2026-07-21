@@ -58,9 +58,10 @@ export async function main(ns) {
         13.1, // Hard.   Unlock Stanek's Gift. We've put a lot of effort into min/maxing the Tetris, so we should try to get it early, even though it's a hard BN. I might change my mind and push this down if it proves too slow.
         7.1,  // Hard.   Unlocks the bladeburner API (and bladeburner outside of BN 6/7). Many recommend it before BN9 since it ends up being a faster win condition in some of the tougher bitnodes ahead.
         9.1,  // Hard.   Unlocks hacknet servers. Hashes can be earned and spent on cash very early in a tough BN to help kick-start things. Hacknet productin/costs improved by 12%
-        14.2, // Hard.   Boosts go.js bonuses, but note that we can automate IPvGO from the very start (BN1.1), no need to unlock it. 14.1 doubles all bonuses. 14.2 unlocks the cheat API.
+         14.2, // Hard.   Boosts go.js bonuses, but note that we can automate IPvGO from the very start (BN1.1), no need to unlock it. 14.1 doubles all bonuses. 14.2 unlocks the cheat API.
+         15.1, // Hard.   Unlocks DarkNet mechanics (darknet.js, labyrinth, virus scripts). New dimension that can be farmed in any BN once unlocked.
 
-        // 3nd Priority: With most features unlocked, max out SF levels roughly in the order of greatest boost and/or easiest difficulty, to hardest and/or less worthwhile
+         // 3nd Priority: With most features unlocked, max out SF levels roughly in the order of greatest boost and/or easiest difficulty, to hardest and/or less worthwhile
         2.3,  // Easy.   Boosts to crime success / money / CHA will speed along gangs, training and earning augmentations in the future
         5.3,  // Normal. Diminishing boost to hacking multipliers (8% -> 12% -> 14%), but relatively normal bitnode, especially with other features unlocked
         11.3, // Normal. Decrease augmentation cost scaling in a reset (4% -> 6% -> 7%) (can buy more augs per reset). Also boosts company salary/rep (32% -> 48% -> 56%), which we have little use for with gangs.)
@@ -522,8 +523,9 @@ export async function main(ns) {
         // See if home ram has improved. We hold back on launching certain scripts if we are low on home RAM
         homeRam = await getNsDataThroughFile(ns, `ns.getServerMaxRam(ns.args[0])`, null, ["home"]);
 
-        // Launch stock-master in a way that emphasizes it as our main source of income early-on
-        if (!findScript('stockmaster.js') && !disableStockmasterForDaedalus && homeRam >= 32)
+        // Launch stock-master. Skip if API costs are absurd (deep BN12).
+        if (!findScript('stockmaster.js') && !disableStockmasterForDaedalus && homeRam >= 32
+            && (bitNodeMults.FourSigmaMarketDataApiCost || 1) < 50)
             launchScriptHelper(ns, 'stockmaster.js', [
                 "--fracH", resetInfo.currentNode == 8 ? 0.001 : 0.1, // Fraction of wealth to keep as cash (10% - unless in BN8)
                 "--reserve", 0, // Override to ignore the global reserve.txt. Any money we reserve can more or less safely live as stocks
@@ -538,6 +540,15 @@ export async function main(ns) {
                 sleeveArgs.push("--disable-bladeburner");
             launchScriptHelper(ns, 'sleeve.js', sleeveArgs);
         }
+
+        // DarkNet — daemon doesn't handle these, launch from autopilot
+        if (15 in unlockedSFs || resetInfo.currentNode == 15) {
+            if (!findScript('darknet.js')) launchScriptHelper(ns, 'darknet.js');
+            if (!findScript('darknet-virus.js')) launchScriptHelper(ns, 'darknet-virus.js');
+            if (!findScript('labyrinth.js')) launchScriptHelper(ns, 'labyrinth.js');
+        }
+        if (resetInfo.currentNode == 15 && !findScript('bn15-sidecar.js'))
+            launchScriptHelper(ns, 'bn15-sidecar.js');
 
         // Spend hacknet hashes on our boosting best hack-income server once established
         let existingSpendHashesProc = findScript('spend-hacknet-hashes.js', s => s.args.includes("--spend-on-server"))
