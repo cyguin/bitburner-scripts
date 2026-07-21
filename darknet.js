@@ -70,8 +70,8 @@ export async function main(ns) {
                 }
             }
 
-            // Propagate: copy ourselves to newly-authed darknet servers so they can go deeper
-            if (newlyAuthed && isDarknet) {
+            // Propagate: copy ourselves to newly-authed servers so they can go deeper
+            if (newlyAuthed) {
                 for (const host of visible) {
                     const entry = cache[host];
                     if (!entry.session || entry.deployed) continue;
