@@ -1,11 +1,10 @@
-import { log, getConfiguration, getErrorInfo } from './helpers.js'
+import { log, getConfiguration, getErrorInfo, getNsDataThroughFile } from './helpers.js'
 import { getCandidates } from './crackers.js'
 
 const argsSchema = [
-    ['interval', 10000],
+    ['interval', 5000],
     ['max-retries', 60],
     ['password-cache', '/data/dnet-passwords.txt'],
-    ['launch-looters', true],
 ];
 
 export function autocomplete(data, args) { data.flags(argsSchema); return []; }
@@ -15,123 +14,98 @@ export async function main(ns) {
     try { dnet = ns.dnet; opts = getConfiguration(ns, argsSchema); } catch { return; }
     if (!dnet) return;
     ns.disableLog('ALL');
-    log(ns, 'darknet.js running');
+
+    const server = ns.getHostname();
+    const isDarknet = dnet.isDarknetServer(server);
+    log(ns, `darknet on ${server}${isDarknet ? ' (dnet)' : ''}`);
 
     let cache = loadCache(ns, opts);
 
     while (true) {
         try {
-            const server = ns.getHostname();
+            const visible = dnet.probe(false).filter(h => dnet.isDarknetServer(h));
+            let newlyAuthed = false;
 
-            if (dnet.isDarknetServer(server)) {
-                await serverTick(ns, dnet, server, cache, opts);
-            } else {
-                await homeTick(ns, dnet, cache, opts);
+            for (const host of visible) {
+                if (!(host in cache)) cache[host] = {};
+                const entry = cache[host];
+
+                if (entry.session) continue; // Already have session
+
+                const details = dnet.getServerDetails(host);
+                if (!details.isOnline || !details.isConnectedToCurrentServer || details.hasSession) {
+                    if (details.hasSession) entry.session = true;
+                    continue;
+                }
+
+                // Try cached password
+                if (entry.password) {
+                    const r = await dnet.authenticate(host, entry.password);
+                    if (r.success) {
+                        dnet.connectToSession(host, entry.password);
+                        entry.session = true;
+                        log(ns, `auth ${host} (cached)`);
+                        newlyAuthed = true;
+                        continue;
+                    }
+                }
+
+                // Crack password
+                const candidates = getCandidates(details.modelId,
+                    details.passwordHint || '', details.passwordLength || 1, details.data || '');
+                const attempts = Math.min(candidates.length, opts['max-retries']);
+
+                for (let i = 0; i < attempts; i++) {
+                    const pw = candidates[i].slice(0, Math.min(details.passwordLength || 50, 50));
+                    const r = await dnet.authenticate(host, pw);
+                    if (r.success) {
+                        dnet.connectToSession(host, pw);
+                        entry.password = pw;
+                        entry.session = true;
+                        log(ns, `auth ${host} (${i + 1}/${attempts})`);
+                        newlyAuthed = true;
+                        break;
+                    }
+                    await ns.sleep(50);
+                }
+            }
+
+            // Propagate: copy ourselves to newly-authed darknet servers so they can go deeper
+            if (newlyAuthed && isDarknet) {
+                for (const host of visible) {
+                    const entry = cache[host];
+                    if (!entry.session || entry.deployed) continue;
+                    try {
+                        ns.scp([ns.getScriptName(), 'darknet-looter.js', 'darknet-virus.js', 'crackers.js', 'helpers.js'], host, server);
+                        ns.exec(ns.getScriptName(), host, 1);
+                        ns.exec('darknet-looter.js', host, 1);
+                        ns.exec('darknet-virus.js', host, 1);
+                        entry.deployed = true;
+                        log(ns, `deployed to ${host}`);
+                    } catch {}
+                }
+            }
+
+            // Server-local ops (only if we're ON a darknet server)
+            if (isDarknet) {
+                for (const f of ns.ls(server).filter(f => f.endsWith('.cache'))) {
+                    try { const r = await dnet.openCache(f, true); } catch {}
+                }
+                try { await dnet.phishingAttack(); } catch {}
+                try {
+                    const details = dnet.getServerDetails();
+                    if (details.blockedRam > 0) {
+                        const r = await dnet.memoryReallocation(server);
+                        if (r.success) log(ns, `freed ${details.blockedRam}GB on ${server}`);
+                    }
+                } catch {}
             }
 
             saveCache(ns, cache, opts);
         } catch (e) {
-            log(ns, `darknet error: ${getErrorInfo(e)}`);
+            log(ns, `error: ${getErrorInfo(e)}`);
         }
         await ns.sleep(opts.interval);
-    }
-}
-
-// Runs on home: probe darknet from home's network, auth visible neighbors
-async function homeTick(ns, dnet, cache, opts) {
-    const visible = dnet.probe().filter(h => dnet.isDarknetServer(h));
-    if (!visible.length) return;
-
-    for (const host of visible) {
-        if (!(host in cache)) cache[host] = {};
-        try {
-            await authServer(ns, dnet, host, cache[host], opts);
-        } catch {}
-    }
-}
-
-// Runs on a darknet server: open caches, phishing, auth neighbors
-async function serverTick(ns, dnet, server, cache, opts) {
-    // Open cache files
-    const files = ns.ls(server).filter(f => f.endsWith('.cache'));
-    for (const f of files) {
-        try { await dnet.openCache(f, true); } catch {}
-    }
-
-    // Phishing attack
-    try { await dnet.phishingAttack(); } catch {}
-
-    // Memory reallocation
-    try {
-        const details = dnet.getServerDetails();
-        if (details.blockedRam > 0) {
-            await dnet.memoryReallocation(server);
-            log(ns, `freed RAM on ${server}`);
-        }
-    } catch {}
-
-    // Lab report at depth >= 7
-    try {
-        const depth = dnet.getDepth(server);
-        if (depth >= 7) {
-            const r = await dnet.labreport();
-            if (r.success) log(ns, `lab: ${r.message}`);
-        }
-    } catch {}
-
-    // Auth visible neighbors
-    const neighbors = dnet.probe(false).filter(h => dnet.isDarknetServer(h));
-    for (const n of neighbors) {
-        if (!(n in cache)) cache[n] = {};
-        try { await authServer(ns, dnet, n, cache[n], opts); } catch {}
-    }
-
-    // Launch looters on darknet servers that have session
-    if (opts['launch-looters']) {
-        for (const n of neighbors) {
-            try {
-                const nd = dnet.getServerDetails(n);
-                if (nd.hasSession && !ns.isRunning('darknet-looter.js', n)) {
-                    ns.scp(['darknet-looter.js', 'darknet-virus.js'], n, 'home');
-                    ns.exec('darknet-looter.js', n, 1);
-                    ns.exec('darknet-virus.js', n, 1);
-                }
-            } catch {}
-        }
-    }
-}
-
-async function authServer(ns, dnet, host, entry, opts) {
-    const details = dnet.getServerDetails(host);
-    if (!details.isOnline || !details.isConnectedToCurrentServer || details.hasSession)
-        return;
-
-    // Try cached password
-    if (entry.password) {
-        const r = await dnet.authenticate(host, entry.password);
-        if (r.success) { dnet.connectToSession(host, entry.password); return; }
-    }
-
-    // Crack password
-    const candidates = getCandidates(details.modelId, details.passwordHint || '',
-        details.passwordLength || 1, details.data || '');
-    const attempts = Math.min(candidates.length, opts['max-retries']);
-
-    for (let i = 0; i < attempts; i++) {
-        const pw = candidates[i].slice(0, Math.min(details.passwordLength || 50, 50));
-        const r = await dnet.authenticate(host, pw);
-        if (r.success) {
-            dnet.connectToSession(host, pw);
-            entry.password = pw;
-            log(ns, `auth ${host} (${i + 1}/${attempts})`);
-            return;
-        }
-        try {
-            const hb = await dnet.heartbleed(host, { peek: true, logsToCapture: 1 });
-            if (hb.success && hb.logs?.length)
-                log(ns, `hb ${host}: ${hb.logs[0]}`);
-        } catch {}
-        await ns.sleep(100);
     }
 }
 
