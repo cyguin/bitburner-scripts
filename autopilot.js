@@ -647,6 +647,13 @@ export async function main(ns) {
             }
             // Prevent daemon from starting "work-for-faction.js" since we now manage that script
             daemonArgs.push('--disable-script', getFilePath('work-for-factions.js'));
+            // BN12: disable scripts that are useless at deep recursion (0.14% rates)
+            if (resetInfo.currentNode == 12) {
+                daemonArgs.push('--disable-script', getFilePath('host-manager.js'));
+                daemonArgs.push('--disable-script', getFilePath('hacknet-upgrade-manager.js'));
+                daemonArgs.push('--disable-script', getFilePath('/Tasks/contractor.js'));
+                daemonArgs.push('--disable-script', getFilePath('/Tasks/deploy-scripts.js'));
+            }
             // In BN8, always run in a mode that prioritizes stock market manipulation
             if (resetInfo.currentNode == 8) daemonArgs.push("--stock-manipulation-focus");
             // Don't run the script to join and manage bladeburner if it is explicitly disabled
