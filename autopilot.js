@@ -619,6 +619,18 @@ export async function main(ns) {
             }
         }
 
+        // Kill daemon if player is on a darknet server (manual labyrinth/darknet play)
+        let playerOnDarknet = false;
+        try {
+            const currentSrv = ns.singularity?.getCurrentServer?.();
+            if (currentSrv && ns.dnet?.isDarknetServer?.(currentSrv)) playerOnDarknet = true;
+        } catch {}
+        if (playerOnDarknet) {
+            if (findScript('daemon.js'))
+                await killScript(ns, 'daemon.js', null, findScript('daemon.js'));
+            return; // Skip daemon launch + everything else while player is on darknet
+        }
+
         const existingDaemon = findScript('daemon.js');
         let daemonArgs = []; // The args we currently want deamon to have
         let daemonRelaunchMessage; // Will hold any special messages we want to show the user if relaunching daemon.
