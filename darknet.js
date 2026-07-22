@@ -44,6 +44,10 @@ export async function main(ns) {
 
                 // Authenticate if not yet connected
                 if (!cache[hostname].session) {
+                    // AccountsManager_4.2 is interactive higher/lower — handle inline
+                    if (details.modelId === 'AccountsManager_4.2') {
+                        await authInteractive(ns, dnet, hostname, cache[hostname], details);
+                    } else {
                     const candidates = getCandidates(
                         details.modelId, details.passwordHint || '',
                         details.passwordLength || 1, details.data || ''
@@ -69,6 +73,7 @@ export async function main(ns) {
                         log(ns, `auth ${hostname}: FAILED all ${attempts} attempts`);
                         cache[hostname]._loggedFail = true;
                     }
+                    } // end else (non-interactive auth)
                 }
 
                 // Spread this script to newly-authed servers
@@ -112,4 +117,40 @@ function saveCache(ns, cache, opts) {
     const flat = {};
     for (const [h, d] of Object.entries(cache)) if (d.password) flat[h] = d.password;
     try { ns.write(opts['password-cache'], JSON.stringify(flat), 'w'); } catch {}
+}
+
+async function authInteractive(ns, dnet, hostname, entry, details) {
+    const h = details.passwordHint || '';
+    const l = details.passwordLength || 2;
+    const range = h.match(/between\s*(\d+)\s*and\s*(\d+)/i);
+    let lo = range ? parseInt(range[1], 10) : 0;
+    let hi = range ? parseInt(range[2], 10) : 100;
+
+    // Start binary search from where we left off
+    let guess = entry._guess != null ? entry._guess : Math.floor((lo + hi) / 2);
+
+    for (let i = 0; i < 20; i++) {
+        const pw = String(guess).padStart(l, '0');
+        const r = await dnet.authenticate(hostname, pw);
+        if (r.success) {
+            entry.password = pw;
+            entry.session = true;
+            delete entry._guess;
+            log(ns, `auth ${hostname} SUCCESS: ${pw}`);
+            return true;
+        }
+
+        const feedback = r.data || '';
+        if (feedback.includes('Lower') || feedback.includes('lower')) {
+            hi = guess - 1;
+        } else if (feedback.includes('Higher') || feedback.includes('higher')) {
+            lo = guess + 1;
+        }
+
+        if (lo > hi) break;
+        guess = Math.floor((lo + hi) / 2);
+        entry._guess = guess;
+        await ns.sleep(50);
+    }
+    return false;
 }
