@@ -47,7 +47,8 @@ export async function main(ns) {
                     // AccountsManager_4.2 or DeepGreen are interactive — handle inline
                     if (details.modelId === 'AccountsManager_4.2' || details.modelId === 'DeepGreen'
                         || details.modelId === 'NIL' || details.modelId === 'OpenWebAccessPoint'
-                        || details.modelId === 'Pr0verFl0') {
+                        || details.modelId === 'Pr0verFl0' || details.modelId === 'Factori-Os'
+                        || details.modelId === 'BigMo%od') {
                         await authInteractive(ns, dnet, hostname, cache[hostname], details);
                     } else {
                     const candidates = getCandidates(
@@ -141,12 +142,15 @@ async function authInteractive(ns, dnet, hostname, entry, details) {
     if (model === 'Pr0verFl0') {
         const payload = 'aaaaa'.slice(0, l) + 'aaaaa'.slice(0, l);
         const r = await dnet.authenticate(hostname, payload);
-        if (r.success) {
-            entry.password = payload;
-            entry.session = true;
-            log(ns, `auth ${hostname} SUCCESS: buffer overflow`);
-            return true;
-        }
+        if (r.success) { entry.password = payload; entry.session = true; log(ns, `auth ${hostname} SUCCESS: bo`); return true; }
+        return false;
+    }
+    if (model === 'Factori-Os') {
+        return await authFactoriOs(ns, dnet, hostname, entry, l);
+    }
+    if (model === 'BigMo%od') {
+        return await authBigMod(ns, dnet, hostname, entry, l);
+    }
         return false;
     }
 
@@ -379,6 +383,91 @@ async function authOpenWeb(ns, dnet, hostname, entry, l) {
         await ns.sleep(50);
     }
     return false;
+}
+
+async function authFactoriOs(ns, dnet, hostname, entry, l) {
+    if (!entry._foPrimes) entry._foPrimes = [2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37, 41, 43, 47,
+        53, 59, 61, 67, 71, 73, 79, 83, 89, 97];
+    if (!entry._foIdx) entry._foIdx = 0;
+    if (!entry._foFactors) entry._foFactors = [];
+
+    const primes = entry._foPrimes;
+    for (let i = entry._foIdx; i < primes.length; i++) {
+        entry._foIdx = i + 1;
+        const p = String(primes[i]);
+        const r = await dnet.authenticate(hostname, p);
+        await ns.sleep(30);
+        if (r.success) { entry.password = p; entry.session = true; return true; }
+        if (r.data === 'true') {
+            entry._foFactors.push(primes[i]);
+            const product = entry._foFactors.reduce((a, b) => a * b, 1);
+            const pw = String(product);
+            const r2 = await dnet.authenticate(hostname, pw);
+            if (r2.success) { entry.password = pw; entry.session = true; return true; }
+            // Product not the password - might have repeat factors. Try powers.
+            for (let pow = 2; pow <= 5; pow++) {
+                const pp = String(Math.pow(primes[i], pow));
+                const r3 = await dnet.authenticate(hostname, pp);
+                if (r3.success) { entry.password = pp; entry.session = true; return true; }
+            }
+        }
+    }
+    return false;
+}
+
+async function authBigMod(ns, dnet, hostname, entry, l) {
+    if (!entry._bmRem) entry._bmRem = {};
+    if (!entry._bmN) entry._bmN = 2;
+
+    const rem = entry._bmRem;
+    let n = entry._bmN;
+    for (let i = 0; i < 8; i++, n++) {
+        if ((n - 1) % 32 === 0) n++; // skip n where second mod = 1 (always 0)
+        entry._bmN = n + 1;
+        const r = await dnet.authenticate(hostname, String(n));
+        await ns.sleep(30);
+        if (r.success) { entry.password = String(n); entry.session = true; return true; }
+        const val = parseInt(r.data);
+        if (!isNaN(val)) rem[n] = val;
+
+        // CRT: product of moduli. If it covers the possible password range, reconstruct.
+        const mods = Object.keys(rem).map(Number);
+        const M = mods.reduce((a, b) => a * b, 1);
+        const maxPass = Math.pow(10, l);
+        if (M > maxPass) {
+            // CRT reconstruction
+            let x = 0;
+            for (const m of mods) {
+                const Mi = M / m;
+                const inv = modInverse(Mi % m, m);
+                x = (x + rem[m] * Mi * inv) % M;
+            }
+            const pw = String(x);
+            const r2 = await dnet.authenticate(hostname, pw);
+            if (r2.success) { entry.password = pw; entry.session = true; return true; }
+            // Off by M? Try x + M, x + 2M...
+            for (let k = 1; k < 5; k++) {
+                const pw2 = String(x + k * M);
+                if (pw2.length > l) break;
+                const r3 = await dnet.authenticate(hostname, pw2);
+                if (r3.success) { entry.password = pw2; entry.session = true; return true; }
+            }
+            // Reset: collected enough info but CRT didn't work — moduli conflict
+            entry._bmRem = {}; entry._bmN = 2;
+            return false;
+        }
+    }
+    return false;
+}
+
+function modInverse(a, m) {
+    let [m0, x0, x1] = [m, 0, 1];
+    while (a > 1) {
+        const q = Math.floor(a / m);
+        [m, a] = [a % m, m];
+        [x0, x1] = [x1 - q * x0, x0];
+    }
+    return x1 < 0 ? x1 + m0 : x1;
 }
 
 function permute(arr) {
