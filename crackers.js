@@ -246,12 +246,9 @@ export function getCandidates(modelId, hint, len, data) {
         }
 
         case 'OpenWebAccessPoint': {
-            // Merged: one of the four copies had three extra patterns
-            // (direct --word--, "Connecting to host:word", "passcode: word.")
-            // that never made it into the other three. All four now get the
-            // full set, tried in order from most to least specific.
-            const packet = d;
+            const packet = d || '';
             const out = [];
+            // Direct password markers (most reliable)
             const direct = packet.match(/--(\w+)--/);
             if (direct) out.push(direct[1]);
             const neighbor = packet.match(/Connecting to\s+\S+:(\w+)/i);
@@ -260,11 +257,20 @@ export function getCandidates(modelId, hint, len, data) {
             if (passcode) out.push(passcode[1]);
             const pws = packet.match(/(?:password|pin|code|key|pass)\s*(?::|is|set to)\s*["']?(\w+)["']?/i);
             if (pws) out.push(pws[1]);
-            const hostpw = packet.match(/\S+:(\d{4,10})\b/);
-            if (hostpw) out.push(hostpw[1]);
+            // Extract any standalone multi-digit numbers (likely part of the code)
+            const multiDigits = packet.match(/\b(\d{4})\b/g);
+            if (multiDigits) out.push(...multiDigits);
+            // Bell pepper pattern (-- with special chars between)
+            const bell = packet.match(/(?:\d{2})(\d{4})(?:\d{2})/g);
+            if (bell) out.push(...bell);
+            // Any multi-digit groups from the entire text
             const nums = packet.replace(/[^0-9]/g, '');
-            if (nums) out.push(nums.slice(0, Math.min(l, 8)));
-            return out.length ? out : ['admin'];
+            if (nums && nums.length >= l) {
+                // Try chunks of length `l` from the numeric mass
+                for (let i = 0; i <= nums.length - l; i++)
+                    out.push(nums.slice(i, i + l));
+            }
+            return out.length ? [...new Set(out)] : ['admin'];
         }
 
         case 'OrdoXenos': {
