@@ -46,7 +46,8 @@ export async function main(ns) {
                 if (!cache[hostname].session) {
                     // AccountsManager_4.2 or DeepGreen are interactive — handle inline
                     if (details.modelId === 'AccountsManager_4.2' || details.modelId === 'DeepGreen'
-                        || details.modelId === 'NIL' || details.modelId === 'OpenWebAccessPoint') {
+                        || details.modelId === 'NIL' || details.modelId === 'OpenWebAccessPoint'
+                        || details.modelId === 'Pr0verFl0') {
                         await authInteractive(ns, dnet, hostname, cache[hostname], details);
                     } else {
                     const candidates = getCandidates(
@@ -134,6 +135,19 @@ async function authInteractive(ns, dnet, hostname, entry, details) {
     }
     if (model === 'OpenWebAccessPoint') {
         return await authOpenWeb(ns, dnet, hostname, entry, l);
+    }
+    // Pr0verFl0: classic buffer overflow. Send the same string twice (length = 2*l).
+    // It overflows the password buffer into the expected-value field, making them match.
+    if (model === 'Pr0verFl0') {
+        const payload = 'aaaaa'.slice(0, l) + 'aaaaa'.slice(0, l);
+        const r = await dnet.authenticate(hostname, payload);
+        if (r.success) {
+            entry.password = payload;
+            entry.session = true;
+            log(ns, `auth ${hostname} SUCCESS: buffer overflow`);
+            return true;
+        }
+        return false;
     }
 
     // AccountsManager_4.2: higher/lower guessing game
