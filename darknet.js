@@ -45,7 +45,7 @@ export async function main(ns) {
                 // Authenticate if not yet connected
                 if (!cache[hostname].session) {
                     // AccountsManager_4.2 or DeepGreen are interactive — handle inline
-                    if (details.modelId === 'AccountsManager_4.2' || details.modelId === 'DeepGreen') {
+                    if (details.modelId === 'AccountsManager_4.2' || details.modelId === 'DeepGreen' || details.modelId === 'NIL') {
                         await authInteractive(ns, dnet, hostname, cache[hostname], details);
                     } else {
                     const candidates = getCandidates(
@@ -124,9 +124,12 @@ async function authInteractive(ns, dnet, hostname, entry, details) {
     const l = details.passwordLength || 1;
     const model = details.modelId;
 
-    // DeepGreen: Mastermind. Read exact/position match counts from r.data.
+    // DeepGreen: Mastermind with numeric match counts. NIL: Mastermind with yes/yesn't positional.
     if (model === 'DeepGreen') {
         return await authMastermind(ns, dnet, hostname, entry, l);
+    }
+    if (model === 'NIL') {
+        return await authNIL(ns, dnet, hostname, entry, l);
     }
 
     // AccountsManager_4.2: higher/lower guessing game
@@ -195,6 +198,69 @@ async function authMastermind(ns, dnet, hostname, entry, l) {
         await ns.sleep(50);
     }
     delete entry._mmCandidates; delete entry._mmGuess;
+    return false;
+}
+
+// NIL Mastermind: positional yes/yesn't feedback. Each position independently
+// confirms whether the guessed digit matches the password at that position.
+// Once we know a position is correct, lock it. Keep iterating unknown positions.
+async function authNIL(ns, dnet, hostname, entry, l) {
+    if (!entry._nilLocked) {
+        entry._nilLocked = Array(l).fill(null); // null = unknown, '0'-'9' = locked
+        entry._nilDigit = 0; // current digit being tested
+        entry._nilPos = 0;  // current position for this digit
+    }
+
+    const locked = entry._nilLocked;
+    const digitsCovered = locked.every(d => d != null);
+    if (digitsCovered) {
+        // All positions locked — construct the password
+        const pw = locked.join('');
+        const r = await dnet.authenticate(hostname, pw);
+        if (r.success) {
+            entry.password = pw;
+            entry.session = true;
+            delete entry._nilLocked; delete entry._nilDigit; delete entry._nilPos;
+            log(ns, `auth ${hostname} SUCCESS: ${pw}`);
+            return true;
+        }
+        // If final guess fails, reset and try different approach
+        delete entry._nilLocked; delete entry._nilDigit; delete entry._nilPos;
+        return false;
+    }
+
+    // Build a guess: locked positions use the known digit, others use test digit
+    const testDigit = String(entry._nilDigit);
+    let guess = [];
+    for (let i = 0; i < l; i++) {
+        guess.push(locked[i] != null ? locked[i] : testDigit);
+    }
+    const pw = guess.join('');
+    const r = await dnet.authenticate(hostname, pw);
+    if (r.success) {
+        entry.password = pw;
+        entry.session = true;
+        delete entry._nilLocked; delete entry._nilDigit; delete entry._nilPos;
+        log(ns, `auth ${hostname} SUCCESS: ${pw}`);
+        return true;
+    }
+
+    // Parse positional feedback: comma-separated yes/yesn't
+    const fb = (r.data || '').split(',');
+    for (let i = 0; i < Math.min(l, fb.length); i++) {
+        if (fb[i].trim() === 'yes' && locked[i] == null) {
+            locked[i] = testDigit;
+        }
+    }
+
+    // Move to next digit
+    entry._nilDigit++;
+    if (entry._nilDigit > 9) {
+        // Shouldn't happen if feedback was correct, but reset
+        delete entry._nilLocked; delete entry._nilDigit; delete entry._nilPos;
+        return false;
+    }
+    await ns.sleep(50);
     return false;
 }
 
