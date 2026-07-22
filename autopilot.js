@@ -914,6 +914,27 @@ export async function main(ns) {
         if (inFirstBn9Aug || resetInfo.currentNode == 8)
             reducedAugReq = -2;
         if (resetInfo.currentNode == 12) reducedAugReq = options['install-at-aug-count'];
+        // BN15: labyrinth drops TRP directly — install immediately to lock it in
+        if (resetInfo.currentNode == 15 && installedAugmentations.includes(augTRP))
+            reducedAugReq = options['install-at-aug-count'];
+        // BN15: labyrinth drops TRP directly into installed augs mid-cycle.
+        // Install immediately to lock it in, no need to queue other augs.
+        if (resetInfo.currentNode == 15 && !installedAugmentations.includes(augTRP)) {
+            const freshAugs = await getNsDataThroughFile(ns, 'ns.singularity.getOwnedAugmentations()',
+                '/Temp/player-augs-installed.txt');
+            if (freshAugs?.includes(augTRP)) {
+                log(ns, 'TRP detected from labyrinth. Installing immediately.', true);
+                installedAugmentations = freshAugs;
+                // Cleanup + install (same pattern as handleDestroy but installAugs, not destroy)
+                let pid = launchScriptHelper(ns, 'cleanup.js');
+                if (pid) await waitForProcessToComplete(ns, pid);
+                pid = await runCommand(ns, `ns.singularity.installAugmentations(ns.args[0])`,
+                    '/Temp/singularity-install-augs.js', ['BN15-labyrinth']);
+                if (pid) await waitForProcessToComplete(ns, pid);
+                return false; // Shut down autopilot after install
+            }
+        }
+
         // Collect additional information about how many augmentations we need before it's worth resetting, based on the current configuration
         const sf11Level = dictOwnedSourceFiles[11] ?? 0; // SF11 makes augs scale cheaper, so for each level, require +1 augs
         const augsNeeded = Math.max(1, options['install-at-aug-count'] + sf11Level - reducedAugReq);
