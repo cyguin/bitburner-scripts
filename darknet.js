@@ -45,7 +45,8 @@ export async function main(ns) {
                 // Authenticate if not yet connected
                 if (!cache[hostname].session) {
                     // AccountsManager_4.2 or DeepGreen are interactive — handle inline
-                    if (details.modelId === 'AccountsManager_4.2' || details.modelId === 'DeepGreen' || details.modelId === 'NIL') {
+                    if (details.modelId === 'AccountsManager_4.2' || details.modelId === 'DeepGreen'
+                        || details.modelId === 'NIL' || details.modelId === 'OpenWebAccessPoint') {
                         await authInteractive(ns, dnet, hostname, cache[hostname], details);
                     } else {
                     const candidates = getCandidates(
@@ -130,6 +131,9 @@ async function authInteractive(ns, dnet, hostname, entry, details) {
     }
     if (model === 'NIL') {
         return await authNIL(ns, dnet, hostname, entry, l);
+    }
+    if (model === 'OpenWebAccessPoint') {
+        return await authOpenWeb(ns, dnet, hostname, entry, l);
     }
 
     // AccountsManager_4.2: higher/lower guessing game
@@ -269,11 +273,100 @@ async function authNIL(ns, dnet, hostname, entry, l) {
         delete entry._nilLocked; delete entry._nilDigit; delete entry._nilPos;
         return false;
     }
-    await ns.sleep(50);
+// OpenWebAccessPoint: password clues are in heartbleed traffic logs, not static data.
+// Extract digit clues ("I can see a X and a Y"), build permutations, try them.
+async function authOpenWeb(ns, dnet, hostname, entry, l) {
+    // Collect digit clues across multiple heartbleed calls
+    if (!entry._owClues) {
+        entry._owClues = new Set();
+        entry._owCandidates = null;
+        entry._owIdx = 0;
+    }
+
+    // Extract "I can see a X and a Y" patterns from recent heartbleed
+    const hb = await dnet.heartbleed(hostname, { peek: true, logsToCapture: 3 });
+    if (hb.success && hb.logs) {
+        for (const log of hb.logs) {
+            const matches = log.match(/see a (\d) and a (\d)/gi);
+            if (matches) {
+                for (const m of matches) {
+                    const d = m.match(/\d/g);
+                    if (d) d.forEach(x => entry._owClues.add(x));
+                }
+            }
+            // Also extract "X and Y are important" patterns
+            const imp = log.match(/(\d) and (\d) are important/gi);
+            if (imp) {
+                for (const m of imp) {
+                    const d = m.match(/\d/g);
+                    if (d) d.forEach(x => entry._owClues.add(x));
+                }
+            }
+        }
+    }
+
+    // Read Mastermind feedback from heartbleed data
+    const hasFeedback = hb.logs?.some(log => /No characters are in the right place/i.test(log)
+        || /characters?.*in the right place/i.test(log));
+    if (hasFeedback && entry._owCandidates) {
+        // Filter: remove the last guess from candidates if "no characters right"
+        if (hb.logs?.some(log => /No characters are in the right place/i.test(log))
+            && entry._owCandidates.length > 1) {
+            entry._owCandidates = entry._owCandidates.filter(c => c !== entry._owLastGuess);
+        }
+        entry._owIdx = 0;
+    }
+
+    // Clues collected but not yet built into candidate list
+    if (!entry._owCandidates || entry._owIdx >= entry._owCandidates.length) {
+        const clues = [...entry._owClues];
+        if (clues.length >= l) {
+            // Generate all permutations of clue digits, plus extra combos with 0
+            const candidates = new Set();
+            for (const perm of permute(clues)) {
+                const p = perm.slice(0, l).join('');
+                if (p.length === l) candidates.add(p);
+            }
+            // Also try repeating the first clue digit
+            const repeat = clues[0].repeat(l);
+            candidates.add(repeat);
+            entry._owCandidates = [...candidates];
+        } else if (clues.length > 0) {
+            // Not enough clues — pad with common digits
+            entry._owCandidates = [clues.join('').padEnd(l, '0'), clues.join('').padEnd(l, '9')];
+        } else {
+            entry._owCandidates = ['0'.repeat(l)];
+        }
+        entry._owIdx = 0;
+    }
+
+    // Try next candidate
+    for (let i = 0; i < Math.min(5, entry._owCandidates.length - entry._owIdx); i++) {
+        const pw = entry._owCandidates[entry._owIdx];
+        entry._owLastGuess = pw;
+        entry._owIdx++;
+        const r = await dnet.authenticate(hostname, pw);
+        if (r.success) {
+            entry.password = pw;
+            entry.session = true;
+            delete entry._owClues; delete entry._owCandidates; delete entry._owIdx; delete entry._owLastGuess;
+            log(ns, `auth ${hostname} SUCCESS: ${pw}`);
+            return true;
+        }
+        await ns.sleep(50);
+    }
     return false;
 }
 
-function getMastermindScore(guess, target) {
+function permute(arr) {
+    if (arr.length <= 1) return [arr.slice()];
+    const result = [];
+    for (let i = 0; i < arr.length; i++) {
+        const rest = permute(arr.filter((_, j) => j !== i));
+        for (const r of rest) result.push([arr[i], ...r]);
+    }
+    return result;
+}
     let exact = 0, wrongPos = 0;
     const gUsed = [], tUsed = [];
     for (let j = 0; j < guess.length; j++) {
