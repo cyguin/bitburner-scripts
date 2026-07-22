@@ -550,21 +550,30 @@ export async function main(ns) {
         // DarkNet — daemon doesn't handle these, launch from autopilot
         if (15 in unlockedSFs || resetInfo.currentNode == 15) {
             if (!findScript('darknet.js')) {
-                // Darknet auth requires the script to run ON a darknet server (home
-                // isn't one). Find an entry server, connect to it, run the worm there.
                 let handled = false;
                 try {
                     const dnet = ns.dnet;
                     if (dnet) {
-                        const nearby = dnet.probe().filter(h => dnet.isDarknetServer(h));
-                        if (nearby.length) {
-                            const entry = nearby[0];
+                        // If player is already on a darknet server, exec directly
+                        const currentSrv = ns.singularity?.getCurrentServer?.() || 'home';
+                        if (dnet.isDarknetServer(currentSrv)) {
                             ns.scp(['darknet.js', 'darknet-looter.js', 'darknet-virus.js',
-                                    'crackers.js', 'helpers.js'], entry, 'home');
-                            if (ns.singularity) ns.singularity.connect(entry);
-                            ns.exec('darknet.js', entry, 1);
+                                    'crackers.js', 'helpers.js'], currentSrv, 'home');
+                            ns.exec('darknet.js', currentSrv, 1);
                             handled = true;
-                            log(ns, `Darknet worm deployed to ${entry}`);
+                            log(ns, `Darknet worm deployed to ${currentSrv} (player already here)`);
+                        } else {
+                            // Find entry server from home, scp + exec there
+                            const nearby = dnet.probe().filter(h => dnet.isDarknetServer(h));
+                            if (nearby.length) {
+                                const entry = nearby[0];
+                                ns.scp(['darknet.js', 'darknet-looter.js', 'darknet-virus.js',
+                                        'crackers.js', 'helpers.js'], entry, 'home');
+                                if (ns.singularity) ns.singularity.connect(entry);
+                                ns.exec('darknet.js', entry, 1);
+                                handled = true;
+                                log(ns, `Darknet worm deployed to ${entry}`);
+                            }
                         }
                     }
                 } catch (e) { log(ns, `Darknet deployment failed: ${e?.message || e}`); }
