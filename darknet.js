@@ -283,10 +283,19 @@ async function authOpenWeb(ns, dnet, hostname, entry, l) {
         entry._owIdx = 0;
     }
 
-    // Extract "I can see a X and a Y" patterns from recent heartbleed
-    const hb = await dnet.heartbleed(hostname, { peek: true, logsToCapture: 3 });
+    // Extract "I can see a X and a Y" patterns and credential leaks from heartbleed
+    const hb = await dnet.heartbleed(hostname, { peek: true, logsToCapture: 5 });
     if (hb.success && hb.logs) {
         for (const log of hb.logs) {
+            // Direct credential leaks: other servers authenticating with this one's password
+            // Format: hostname:password or "passcode: NNNNN" or "Logging in with passcode: NNNNN"
+            const leak = log.match(/:(\d+)$/m)
+                || log.match(/passcode:\s*(\d+)/i)
+                || log.match(/password:\s*(\d+)/i);
+            if (leak && leak[1].length === l) {
+                entry._owCandidates = [leak[1]];
+                entry._owIdx = 0;
+            }
             const matches = log.match(/see a (\d) and a (\d)/gi);
             if (matches) {
                 for (const m of matches) {
