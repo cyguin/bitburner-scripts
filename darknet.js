@@ -22,11 +22,15 @@ export async function main(ns) {
         try {
             const nearby = dnet.probe();
 
+            // Status line: log what we see
+            log(ns, `${ns.getHostname()}: ${nearby.length} nearby, ${nearby.filter(h => cache[h]?.session).length} authed`);
+
             for (const hostname of nearby) {
                 if (!(hostname in cache)) cache[hostname] = {};
 
                 const details = dnet.getServerDetails(hostname);
-                if (!details.isConnectedToCurrentServer || !details.isOnline) continue;
+                if (!details.isOnline) { if (!cache[hostname]._loggedOffline) { log(ns, `${hostname}: offline`); cache[hostname]._loggedOffline = true; } continue; }
+                if (!details.isConnectedToCurrentServer) { if (!cache[hostname]._loggedNoConn) { log(ns, `${hostname}: not connected (${details.modelId || '?'})`); cache[hostname]._loggedNoConn = true; } continue; }
                 if (details.hasSession) { cache[hostname].session = true; continue; }
 
                 // Try cached password via connectToSession (sync, any distance)
@@ -45,6 +49,10 @@ export async function main(ns) {
                         details.passwordLength || 1, details.data || ''
                     );
                     const attempts = Math.min(candidates.length, opts['max-retries']);
+                    if (!cache[hostname]._loggedModel) {
+                        log(ns, `${hostname}: ${details.modelId} (${details.passwordHint || 'no hint'}, len ${details.passwordLength}) trying ${attempts} candidates`);
+                        cache[hostname]._loggedModel = true;
+                    }
 
                     for (let i = 0; i < attempts; i++) {
                         const pw = candidates[i].slice(0, Math.min(details.passwordLength || 50, 50));
@@ -52,10 +60,14 @@ export async function main(ns) {
                         if (r.success) {
                             cache[hostname].password = pw;
                             cache[hostname].session = true;
-                            log(ns, `auth ${hostname} (${i + 1}/${attempts})`);
+                            log(ns, `auth ${hostname} SUCCESS (${i + 1}/${attempts})`);
                             break;
                         }
                         await ns.sleep(50);
+                    }
+                    if (!cache[hostname].session && !cache[hostname]._loggedFail) {
+                        log(ns, `auth ${hostname}: FAILED all ${attempts} attempts`);
+                        cache[hostname]._loggedFail = true;
                     }
                 }
 
