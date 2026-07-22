@@ -133,27 +133,36 @@ async function authInteractive(ns, dnet, hostname, entry, details) {
     }
 
     // AccountsManager_4.2: higher/lower guessing game
+    let lo = entry._binaryLo != null ? entry._binaryLo : 0;
+    let hi = entry._binaryHi != null ? entry._binaryHi : 100;
     const range = h.match(/between\s*(\d+)\s*and\s*(\d+)/i);
-    let lo = range ? parseInt(range[1], 10) : 0;
-    let hi = range ? parseInt(range[2], 10) : 100;
+    if (range) { lo = parseInt(range[1], 10); hi = parseInt(range[2], 10); }
+    entry._binaryLo = lo;
+    entry._binaryHi = hi;
+
     let guess = entry._guess != null ? entry._guess : Math.floor((lo + hi) / 2);
 
     for (let i = 0; i < 20; i++) {
         const pw = String(guess).padStart(l, '0');
-        const r = await dnet.authenticate(hostname, pw);
-        if (r.success) {
-            entry.password = pw;
-            entry.session = true;
-            delete entry._guess;
-            log(ns, `auth ${hostname} SUCCESS: ${pw}`);
-            return true;
-        }
-        const fb = r.data || '';
-        if (fb.includes('Lower') || fb.includes('lower')) hi = guess - 1;
-        else if (fb.includes('Higher') || fb.includes('higher')) lo = guess + 1;
-        if (lo > hi) break;
+        try {
+            const r = await dnet.authenticate(hostname, pw);
+            if (r && r.success) {
+                entry.password = pw;
+                entry.session = true;
+                delete entry._guess; delete entry._binaryLo; delete entry._binaryHi;
+                log(ns, `auth ${hostname} SUCCESS: ${pw}`);
+                return true;
+            }
+            const fb = String(r?.data || '');
+            if (fb.includes('Lower') || fb.includes('lower')) { hi = guess - 1; }
+            else if (fb.includes('Higher') || fb.includes('higher')) { lo = guess + 1; }
+            // If no feedback, keep lo/hi as-is and advance guess
+            if (lo > hi) break;
+        } catch (e) { ns.print(`authInteractive error: ${e}`); }
         guess = Math.floor((lo + hi) / 2);
         entry._guess = guess;
+        entry._binaryLo = lo;
+        entry._binaryHi = hi;
         await ns.sleep(50);
     }
     return false;
