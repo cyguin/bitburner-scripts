@@ -44,8 +44,8 @@ export async function main(ns) {
 
                 // Authenticate if not yet connected
                 if (!cache[hostname].session) {
-                    // AccountsManager_4.2 is interactive higher/lower — handle inline
-                    if (details.modelId === 'AccountsManager_4.2') {
+                    // AccountsManager_4.2 or DeepGreen are interactive — handle inline
+                    if (details.modelId === 'AccountsManager_4.2' || details.modelId === 'DeepGreen') {
                         await authInteractive(ns, dnet, hostname, cache[hostname], details);
                     } else {
                     const candidates = getCandidates(
@@ -121,12 +121,18 @@ function saveCache(ns, cache, opts) {
 
 async function authInteractive(ns, dnet, hostname, entry, details) {
     const h = details.passwordHint || '';
-    const l = details.passwordLength || 2;
+    const l = details.passwordLength || 1;
+    const model = details.modelId;
+
+    // DeepGreen: Mastermind. Read exact/position match counts from r.data.
+    if (model === 'DeepGreen') {
+        return await authMastermind(ns, dnet, hostname, entry, l);
+    }
+
+    // AccountsManager_4.2: higher/lower guessing game
     const range = h.match(/between\s*(\d+)\s*and\s*(\d+)/i);
     let lo = range ? parseInt(range[1], 10) : 0;
     let hi = range ? parseInt(range[2], 10) : 100;
-
-    // Start binary search from where we left off
     let guess = entry._guess != null ? entry._guess : Math.floor((lo + hi) / 2);
 
     for (let i = 0; i < 20; i++) {
@@ -139,18 +145,71 @@ async function authInteractive(ns, dnet, hostname, entry, details) {
             log(ns, `auth ${hostname} SUCCESS: ${pw}`);
             return true;
         }
-
-        const feedback = r.data || '';
-        if (feedback.includes('Lower') || feedback.includes('lower')) {
-            hi = guess - 1;
-        } else if (feedback.includes('Higher') || feedback.includes('higher')) {
-            lo = guess + 1;
-        }
-
+        const fb = r.data || '';
+        if (fb.includes('Lower') || fb.includes('lower')) hi = guess - 1;
+        else if (fb.includes('Higher') || fb.includes('higher')) lo = guess + 1;
         if (lo > hi) break;
         guess = Math.floor((lo + hi) / 2);
         entry._guess = guess;
         await ns.sleep(50);
     }
     return false;
+}
+
+// DeepGreen Mastermind solver. Reads match counts from r.data ("1,0" format).
+async function authMastermind(ns, dnet, hostname, entry, l) {
+    // Start fresh if no state or previous guess didn't match expected feedback
+    if (!entry._mmCandidates || !entry._mmGuess) {
+        // Generate all length-L numeric combinations
+        const digits = Math.min(l, 4);
+        const max = Math.min(Math.pow(10, digits), 10000);
+        entry._mmCandidates = [];
+        for (let i = 0; i < max; i++)
+            entry._mmCandidates.push(String(i).padStart(digits, '0'));
+        entry._mmGuess = 0;
+    }
+
+    for (let i = entry._mmGuess; i < entry._mmCandidates.length; i++) {
+        const pw = entry._mmCandidates[i];
+        entry._mmGuess = i + 1;
+        const r = await dnet.authenticate(hostname, pw);
+        if (r.success) {
+            entry.password = pw;
+            entry.session = true;
+            delete entry._mmCandidates; delete entry._mmGuess;
+            log(ns, `auth ${hostname} SUCCESS: ${pw}`);
+            return true;
+        }
+        const fb = (r.data || '0,0').split(',').map(Number);
+        const [exact, wrongPos] = [fb[0] || 0, fb[1] || 0];
+        if (exact + wrongPos > 0) {
+            // This guess had matches — filter candidates using Mastermind logic
+            entry._mmCandidates = entry._mmCandidates.filter(c =>
+                getMastermindScore(pw, c)[0] === exact &&
+                getMastermindScore(pw, c)[1] === wrongPos
+            );
+            entry._mmGuess = 0;
+            log(ns, `${hostname}: ${pw} -> (${exact},${wrongPos}) narrowed to ${entry._mmCandidates.length}`);
+            return false;
+        }
+        await ns.sleep(50);
+    }
+    delete entry._mmCandidates; delete entry._mmGuess;
+    return false;
+}
+
+function getMastermindScore(guess, target) {
+    let exact = 0, wrongPos = 0;
+    const gUsed = [], tUsed = [];
+    for (let j = 0; j < guess.length; j++) {
+        if (guess[j] === target[j]) { exact++; gUsed[j] = tUsed[j] = true; }
+    }
+    for (let j = 0; j < guess.length; j++) {
+        if (gUsed[j]) continue;
+        for (let k = 0; k < target.length; k++) {
+            if (tUsed[k]) continue;
+            if (guess[j] === target[k]) { wrongPos++; tUsed[k] = true; break; }
+        }
+    }
+    return [exact, wrongPos];
 }
