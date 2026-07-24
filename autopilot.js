@@ -563,6 +563,8 @@ export async function main(ns) {
                                     'crackers.js', 'helpers.js'], entry, 'home');
                             ns.exec('darknet.js', entry, 1);
                             log(ns, `Darknet worm deployed to ${entry}`);
+                            // Connect player to entry so they can resume labyrinth exploration
+                            if (ns.singularity) ns.singularity.connect(entry);
                         }
                     }
                 } catch (e) { log(ns, `Darknet deploy: ${e?.message || e}`); }
