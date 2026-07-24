@@ -246,6 +246,19 @@ export async function main(ns) {
     /** Logic run periodically throughout the BN
      * @param {NS} ns */
     async function mainLoop(ns) {
+        // When player is on a darknet server (labyrinth exploring), skip all
+        // modal-promising functions. Only run script deployment and daemon pause.
+        let playerOnDarknet = false;
+        try {
+            const currentSrv = ns.singularity?.getCurrentServer?.() || 'home';
+            if (ns.dnet?.isDarknetServer?.(currentSrv)) playerOnDarknet = true;
+        } catch {}
+
+        if (playerOnDarknet) {
+            await checkOnRunningScripts(ns, await getPlayerInfo(ns));
+            return true;
+        }
+
         const player = await getPlayerInfo(ns);
         await updateCachedData(ns);
         let stocksValue = 0;
