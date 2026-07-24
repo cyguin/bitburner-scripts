@@ -522,6 +522,18 @@ export async function main(ns) {
         const findScript = /** @param {(value: ProcessInfo, index: number, array: ProcessInfo[]) => unknown} filter @returns {ProcessInfo} */
             (baseScriptName, filter = null) => findScriptHelper(baseScriptName, runningScripts, filter);
 
+        const isRunningOnDarknet = (ns) => {
+            try {
+                const dnet = ns.dnet;
+                if (!dnet) return false;
+                const nearby = dnet.probe().filter(h => dnet.isDarknetServer(h));
+                for (const host of nearby) {
+                    try { if (ns.ps(host).some(p => p.filename.includes('darknet.js'))) return true; } catch {}
+                }
+            } catch {}
+            return false;
+        };
+
         // Kill any scripts that were flagged for restart
         while (killScripts.length > 0)
             await killScript(ns, killScripts.pop(), runningScripts);
@@ -549,9 +561,8 @@ export async function main(ns) {
 
         // DarkNet — daemon doesn't handle these, launch from autopilot
         const inBN15 = 15 in unlockedSFs || resetInfo.currentNode == 15;
-        if (inBN15) log(ns, `BN15 mode: unlocked=${15 in unlockedSFs} node=${resetInfo.currentNode}`);
         if (inBN15) {
-            if (!findScript('darknet.js')) {
+            if (!findScript('darknet.js') && !isRunningOnDarknet(ns)) {
                 try {
                     const dnet = ns.dnet;
                     if (dnet) {
