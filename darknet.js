@@ -112,14 +112,32 @@ export async function main(ns) {
     }
 }
 
-function loadCache(ns, opts) {
-    try { return JSON.parse(ns.read(opts['password-cache'])) || {}; } catch { return {}; }
-}
-
 function saveCache(ns, cache, opts) {
     const flat = {};
-    for (const [h, d] of Object.entries(cache)) if (d.password) flat[h] = d.password;
+    for (const [h, d] of Object.entries(cache)) {
+        const entry = {};
+        if (d.password) entry.pw = d.password;
+        if (d._guess != null) entry.g = d._guess;
+        if (d._binaryLo != null) entry.lo = d._binaryLo;
+        if (d._binaryHi != null) entry.hi = d._binaryHi;
+        if (Object.keys(entry).length) flat[h] = entry;
+    }
     try { ns.write(opts['password-cache'], JSON.stringify(flat), 'w'); } catch {}
+}
+
+function loadCache(ns, opts) {
+    try {
+        const raw = JSON.parse(ns.read(opts['password-cache'])) || {};
+        const cache = {};
+        for (const [h, d] of Object.entries(raw)) {
+            cache[h] = {};
+            if (d.pw) cache[h].password = d.pw;
+            if (d.g != null) cache[h]._guess = d.g;
+            if (d.lo != null) cache[h]._binaryLo = d.lo;
+            if (d.hi != null) cache[h]._binaryHi = d.hi;
+        }
+        return cache;
+    } catch { return {}; }
 }
 
 async function authInteractive(ns, dnet, hostname, entry, details) {
