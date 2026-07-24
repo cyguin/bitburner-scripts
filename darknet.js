@@ -292,6 +292,10 @@ async function authNIL(ns, dnet, hostname, entry, l) {
         delete entry._nilLocked; delete entry._nilDigit; delete entry._nilPos;
         return false;
     }
+    await ns.sleep(50);
+    return false;
+}
+
 // OpenWebAccessPoint: password clues are in heartbleed traffic logs, not static data.
 // Extract digit clues ("I can see a X and a Y"), build permutations, try them.
 async function authOpenWeb(ns, dnet, hostname, entry, l) {
@@ -388,30 +392,34 @@ async function authOpenWeb(ns, dnet, hostname, entry, l) {
 
 async function authFactoriOs(ns, dnet, hostname, entry, l) {
     if (!entry._foPrimes) entry._foPrimes = [2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37, 41, 43, 47,
-        53, 59, 61, 67, 71, 73, 79, 83, 89, 97];
+        53, 59, 61, 67, 71, 73, 79, 83, 89, 97, 101, 103, 107, 109, 113];
     if (!entry._foIdx) entry._foIdx = 0;
-    if (!entry._foFactors) entry._foFactors = [];
+    if (!entry._foProduct) entry._foProduct = 1;
 
     const primes = entry._foPrimes;
     for (let i = entry._foIdx; i < primes.length; i++) {
         entry._foIdx = i + 1;
-        const p = String(primes[i]);
-        const r = await dnet.authenticate(hostname, p);
+        const p = primes[i];
+        const pStr = String(p);
+
+        // Does this prime divide the current remaining password?
+        const r = await dnet.authenticate(hostname, pStr);
         await ns.sleep(30);
-        if (r.success) { entry.password = p; entry.session = true; return true; }
-        if (r.data === 'true') {
-            entry._foFactors.push(primes[i]);
-            const product = entry._foFactors.reduce((a, b) => a * b, 1);
-            const pw = String(product);
-            const r2 = await dnet.authenticate(hostname, pw);
-            if (r2.success) { entry.password = pw; entry.session = true; return true; }
-            // Product not the password - might have repeat factors. Try powers.
-            for (let pow = 2; pow <= 5; pow++) {
-                const pp = String(Math.pow(primes[i], pow));
-                const r3 = await dnet.authenticate(hostname, pp);
-                if (r3.success) { entry.password = pp; entry.session = true; return true; }
-            }
+        if (r.success) { entry.password = pStr; entry.session = true; return true; }
+        if (r.data !== 'true') continue;
+
+        // Keep multiplying by this prime while it still divides
+        let factor = entry._foProduct * p;
+        while (true) {
+            const fStr = String(factor);
+            const r2 = await dnet.authenticate(hostname, fStr);
+            if (r2.success) { entry.password = fStr; entry.session = true; return true; }
+            // Test if factor still divides (it's a partial product, not the full password)
+            if (r2.data !== 'true') { factor = Math.floor(factor / p); break; }
+            factor *= p;
+            await ns.sleep(30);
         }
+        entry._foProduct = factor;
     }
     return false;
 }
