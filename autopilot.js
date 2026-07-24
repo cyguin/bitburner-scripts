@@ -548,7 +548,9 @@ export async function main(ns) {
         }
 
         // DarkNet — daemon doesn't handle these, launch from autopilot
-        if (15 in unlockedSFs || resetInfo.currentNode == 15) {
+        const inBN15 = 15 in unlockedSFs || resetInfo.currentNode == 15;
+        if (inBN15) log(ns, `BN15 mode: unlocked=${15 in unlockedSFs} node=${resetInfo.currentNode}`);
+        if (inBN15) {
             if (!findScript('darknet.js')) {
                 try {
                     const dnet = ns.dnet;
