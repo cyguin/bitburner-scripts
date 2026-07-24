@@ -48,7 +48,7 @@ export async function main(ns) {
                     if (details.modelId === 'AccountsManager_4.2' || details.modelId === 'DeepGreen'
                         || details.modelId === 'NIL' || details.modelId === 'OpenWebAccessPoint'
                         || details.modelId === 'Pr0verFl0' || details.modelId === 'Factori-Os'
-                        || details.modelId === 'BigMo%od') {
+                        || details.modelId === 'BigMo%od' || details.modelId === 'KingOfTheHill') {
                         await authInteractive(ns, dnet, hostname, cache[hostname], details);
                     } else {
                     const candidates = getCandidates(
@@ -150,6 +150,9 @@ async function authInteractive(ns, dnet, hostname, entry, details) {
     }
     if (model === 'BigMo%od') {
         return await authBigMod(ns, dnet, hostname, entry, l);
+    }
+    if (model === 'KingOfTheHill') {
+        return await authKingOfTheHill(ns, dnet, hostname, entry, l);
     }
 
     // AccountsManager_4.2: higher/lower guessing game
@@ -454,6 +457,65 @@ async function authBigMod(ns, dnet, hostname, entry, l) {
             entry._bmRem = {}; entry._bmN = 2;
             return false;
         }
+    }
+    return false;
+}
+
+async function authKingOfTheHill(ns, dnet, hostname, entry, l) {
+    // Scan the full range. For length-L numeric, range is 0 to 10^L-1.
+    // When within 3% of the answer, the game switches to a clean single-peak
+    // Gaussian centered on the password with peak altitude 10,000.
+    if (!entry._kohTried) entry._kohTried = new Set();
+    const tried = entry._kohTried;
+
+    // Try a few values each call, pick the one with highest altitude
+    const range = Math.min(Math.pow(10, l), 10000);
+    let bestX = entry._kohBestX;
+    let bestAlt = entry._kohBestAlt || 0;
+
+    // Phase 1: coarse scan
+    if (!entry._kohCoarse) {
+        const step = Math.max(1, Math.floor(range / 20));
+        for (let x = 0; x < range && tried.size < 50; x += step) {
+            if (tried.has(x)) continue;
+            tried.add(x);
+            const pw = String(x).padStart(l, '0');
+            const r = await dnet.authenticate(hostname, pw);
+            if (r.success) { entry.password = pw; entry.session = true; return true; }
+            const alt = parseFloat(r.data) || 0;
+            if (alt > bestAlt) { bestAlt = alt; bestX = x; }
+            if (alt >= 10000) break;
+            await ns.sleep(30);
+        }
+        entry._kohCoarse = tried.size >= 50 || bestAlt >= 9000;
+        entry._kohBestX = bestX;
+        entry._kohBestAlt = bestAlt;
+        return false;
+    }
+
+    // Phase 2: fine scan around best coarse guess
+    const margin = Math.max(1, Math.floor(range * 0.05));
+    let start = Math.max(0, (bestX || 0) - margin);
+    let end = Math.min(range - 1, (bestX || 0) + margin);
+    for (let x = start; x <= end && tried.size < 100; x++) {
+        if (tried.has(x)) continue;
+        tried.add(x);
+        const pw = String(x).padStart(l, '0');
+        const r = await dnet.authenticate(hostname, pw);
+        if (r.success) { entry.password = pw; entry.session = true; return true; }
+        const alt = parseFloat(r.data) || 0;
+        if (alt > bestAlt) { bestAlt = alt; bestX = x; }
+        if (alt >= 10000) break;
+        await ns.sleep(30);
+    }
+    entry._kohBestX = bestX;
+    entry._kohBestAlt = bestAlt;
+
+    // Phase 3: if we found a peak >= 10000, it's the password
+    if (bestAlt >= 10000) {
+        const pw = String(bestX).padStart(l, '0');
+        const r = await dnet.authenticate(hostname, pw);
+        if (r.success) { entry.password = pw; entry.session = true; return true; }
     }
     return false;
 }
