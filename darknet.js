@@ -151,8 +151,6 @@ async function authInteractive(ns, dnet, hostname, entry, details) {
     if (model === 'BigMo%od') {
         return await authBigMod(ns, dnet, hostname, entry, l);
     }
-        return false;
-    }
 
     // AccountsManager_4.2: higher/lower guessing game
     let lo = entry._binaryLo != null ? entry._binaryLo : 0;
