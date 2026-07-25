@@ -565,6 +565,7 @@ function permute(arr) {
     }
     return result;
 }
+function getMastermindScore(guess, target) {
     let exact = 0, wrongPos = 0;
     const gUsed = [], tUsed = [];
     for (let j = 0; j < guess.length; j++) {
