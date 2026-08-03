@@ -6,7 +6,7 @@ Forked from [Alain Bryden's repo](https://github.com/alainbryden/bitburner-scrip
 
 - BN12 recursion support. Autopilot stays in the loop (install not destroy), daemon runs xp-only, install at 1 aug. Disabled scripts: host-manager, hacknet-upgrade, contractor, deploy-scripts. Stockmaster gated on API cost.
 - BN15 DarkNet support. Autopilot deploys a self-propagating worm to darknet entry servers, pauses daemon during manual labyrinth play, and auto-installs augs when TRP is detected. BN15.1 in the default BN order. Bladeburner and host-manager disabled.
-- DarkNet worm solves all 21 server models via interactive solvers. Keys to making this work: AccountsManager_4.2 uses binary search with persisted lo/hi state across restarts, NIL reads positional yes/yesn't feedback, OpenWebAccessPoint extracts clues from heartbleed traffic logs, Pr0verFl0 exploits buffer overflow, Factori-Os uses running product with repeated prime factors, BigMo%od CRT modulo reconstruction, KingOfTheHill three-phase hill climbing on Gaussian peaks. crackers.js handles the 13 static models.
+- DarkNet worm has solvers for all 21 server models (interactive + static). Keys to making this work: AccountsManager_4.2 binary search with persisted lo/hi state, NIL positional yes/yesn't feedback, OpenWebAccessPoint heartbleed clue extraction, Pr0verFl0 buffer overflow, Factori-Os running product with repeated prime factors, BigMo%od CRT modulo reconstruction, KingOfTheHill three-phase hill climbing. crackers.js handles the 13 static models. Note: solver reliability at scale is untested — propagation is the real bottleneck.
 - DarkNet worm stripped to 25KB (imports only crackers.js, not helpers.js). Exec RAM dropped from ~17GB to ~6.5GB to fit within the 16GB limit on depth 0-5 darknet servers.
 - Labyrinth solver. BFS maze navigator using `dnet.authenticate()` with direction commands. Worm auto-deploys labyrinth.js to labyrinth servers upon auth.
 - Headless. No tail windows by default.
@@ -15,6 +15,7 @@ Forked from [Alain Bryden's repo](https://github.com/alainbryden/bitburner-scrip
 
 ## limitations
 
+- **BN15 is not complete.** Darknet worm propagation, labyrinth solving, and the full augment-to-WD cycle need more testing. Server mutation timing, RAM limits on depth 0-5 servers, and solver reliability at scale are all areas that regress unpredictably. Do not expect a clean hands-off BN15 run yet.
 - **Darknet propagation speed.** The darknet network mutates every cycle based on `MS_PER_MUTATION_PER_ROW / MilliPerCycle`. At high game speed, servers disconnect faster than auth can complete (interactive solvers take 5-10 seconds per server). Spread to neighbor servers requires the target to be in the source's `serversOnNetwork` at the exact moment `ns.exec()` fires. SCP always works (any distance with session), but exec requires direct connection in the server network topology. If the server moves during auth window, exec returns 0 and spread fails. The worm retries on next cycle.
 - **Darknet RAM limits.** Depth 0-5 servers have 16GB max RAM. darknet.js + crackers.js ~6.5GB. Deeper servers have 32GB+.
 - **Labyrinth charisma requirement.** Some labyrinth servers require higher charisma than what you have at early installs. The solver retries after each install cycle.
