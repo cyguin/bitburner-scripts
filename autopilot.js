@@ -586,7 +586,7 @@ export async function main(ns) {
                             // to get a session, then exec the worm directly on the entry.
                             await dnet.authenticate(entry, '');
                             ns.scp(['darknet.js', 'darknet-looter.js', 'darknet-virus.js',
-                                    'crackers.js', 'helpers.js'], entry, 'home');
+                                    'crackers.js'], entry, 'home');
                             const pid = ns.exec('darknet.js', entry, 1);
                             if (pid)
                                 log(ns, `Darknet worm deployed to ${entry} (pid ${pid})`);

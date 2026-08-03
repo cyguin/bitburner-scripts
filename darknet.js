@@ -1,36 +1,29 @@
-import { log, getConfiguration, getErrorInfo } from './helpers.js'
 import { getCandidates } from './crackers.js'
-
-const argsSchema = [
-    ['interval', 5000],
-    ['max-retries', 60],
-    ['password-cache', '/data/dnet-passwords.txt'],
-];
 
 export function autocomplete(data) { return ['--tail']; }
 
 export async function main(ns) {
-    let dnet, opts;
-    try { dnet = ns.dnet; opts = getConfiguration(ns, argsSchema); } catch { return; }
+    let dnet;
+    try { dnet = ns.dnet; } catch { return; }
     if (!dnet) return;
     ns.disableLog('ALL');
-    log(ns, `darknet on ${ns.getHostname()}`);
+    ns.print(`darknet on ${ns.getHostname()}`);
 
-    let cache = loadCache(ns, opts);
+    let cache = loadCache(ns);
 
     while (true) {
         try {
             const nearby = dnet.probe();
 
             // Status line: log what we see
-            log(ns, `${ns.getHostname()}: ${nearby.length} nearby, ${nearby.filter(h => cache[h]?.session).length} authed`);
+            ns.print(`${ns.getHostname()}: ${nearby.length} nearby, ${nearby.filter(h => cache[h]?.session).length} authed`);
 
             for (const hostname of nearby) {
                 if (!(hostname in cache)) cache[hostname] = {};
 
                 const details = dnet.getServerDetails(hostname);
-                if (!details.isOnline) { if (!cache[hostname]._loggedOffline) { log(ns, `${hostname}: offline`); cache[hostname]._loggedOffline = true; } continue; }
-                if (!details.isConnectedToCurrentServer) { if (!cache[hostname]._loggedNoConn) { log(ns, `${hostname}: not connected (${details.modelId || '?'})`); cache[hostname]._loggedNoConn = true; } continue; }
+                if (!details.isOnline) { if (!cache[hostname]._loggedOffline) { ns.print(`${hostname}: offline`); cache[hostname]._loggedOffline = true; } continue; }
+                if (!details.isConnectedToCurrentServer) { if (!cache[hostname]._loggedNoConn) { ns.print(`${hostname}: not connected (${details.modelId || '?'})`); cache[hostname]._loggedNoConn = true; } continue; }
                 if (details.hasSession) { cache[hostname].session = true; continue; }
 
                 // Try cached password via connectToSession (sync, any distance)
@@ -38,7 +31,7 @@ export async function main(ns) {
                     const r = dnet.connectToSession(hostname, cache[hostname].password);
                     if (r.success) {
                         cache[hostname].session = true;
-                        log(ns, `connect ${hostname} (cached)`);
+                        ns.print(`connect ${hostname} (cached)`);
                     }
                 }
 
@@ -58,9 +51,9 @@ export async function main(ns) {
                         details.modelId, details.passwordHint || '',
                         details.passwordLength || 1, details.data || ''
                     );
-                    const attempts = Math.min(candidates.length, opts['max-retries']);
+                    const attempts = Math.min(candidates.length, 60);
                     if (!cache[hostname]._loggedModel) {
-                        log(ns, `${hostname}: ${details.modelId} (${details.passwordHint || 'no hint'}, len ${details.passwordLength}) trying ${attempts} candidates`);
+                        ns.print(`${hostname}: ${details.modelId} (${details.passwordHint || 'no hint'}, len ${details.passwordLength}) trying ${attempts} candidates`);
                         cache[hostname]._loggedModel = true;
                     }
 
@@ -70,7 +63,7 @@ export async function main(ns) {
                         if (r.success) {
                             cache[hostname].password = pw;
                             cache[hostname].session = true;
-                            log(ns, `auth ${hostname} SUCCESS (${i + 1}/${attempts})`);
+                            ns.print(`auth ${hostname} SUCCESS (${i + 1}/${attempts})`);
                             // Spread immediately — darknet topology mutates every 30s, exec must
                             // happen before the connection drops
                             if (!cache[hostname].deployed) {
@@ -81,7 +74,7 @@ export async function main(ns) {
                         await ns.sleep(50);
                     }
                     if (!cache[hostname].session && !cache[hostname]._loggedFail) {
-                        log(ns, `auth ${hostname}: FAILED all ${attempts} attempts`);
+                        ns.print(`auth ${hostname}: FAILED all ${attempts} attempts`);
                         cache[hostname]._loggedFail = true;
                     }
                     } // end else (non-interactive auth)
@@ -98,15 +91,15 @@ export async function main(ns) {
                 } catch {}
             }
 
-            saveCache(ns, cache, opts);
+            saveCache(ns, cache);
         } catch (e) {
-            log(ns, `error: ${getErrorInfo(e)}`);
+            ns.print(`error: ${e?.message || e}`);
         }
-        await ns.sleep(opts.interval);
+        await ns.sleep(1000);
     }
 }
 
-function saveCache(ns, cache, opts) {
+function saveCache(ns, cache) {
     const flat = {};
     for (const [h, d] of Object.entries(cache)) {
         const entry = {};
@@ -116,12 +109,12 @@ function saveCache(ns, cache, opts) {
         if (d._binaryHi != null) entry.hi = d._binaryHi;
         if (Object.keys(entry).length) flat[h] = entry;
     }
-    try { ns.write(opts['password-cache'], JSON.stringify(flat), 'w'); } catch {}
-}
+    try { ns.write('/data/dnet-passwords.txt', JSON.stringify(flat), 'w'); } catch {}
+} 
 
-function loadCache(ns, opts) {
+function loadCache(ns) {
     try {
-        const raw = JSON.parse(ns.read(opts['password-cache'])) || {};
+        const raw = JSON.parse(ns.read('/data/dnet-passwords.txt')) || {};
         const cache = {};
         for (const [h, d] of Object.entries(raw)) {
             cache[h] = {};
@@ -154,7 +147,7 @@ async function authInteractive(ns, dnet, hostname, entry, details) {
     if (model === 'Pr0verFl0') {
         const payload = 'aaaaa'.slice(0, l) + 'aaaaa'.slice(0, l);
         const r = await dnet.authenticate(hostname, payload);
-        if (r.success) { entry.password = payload; entry.session = true; log(ns, `auth ${hostname} SUCCESS: bo`); return true; }
+        if (r.success) { entry.password = payload; entry.session = true; ns.print(`auth ${hostname} SUCCESS: bo`); return true; }
         return false;
     }
     if (model === 'Factori-Os') {
@@ -185,7 +178,7 @@ async function authInteractive(ns, dnet, hostname, entry, details) {
                 entry.password = pw;
                 entry.session = true;
                 delete entry._guess; delete entry._binaryLo; delete entry._binaryHi;
-                log(ns, `auth ${hostname} SUCCESS: ${pw}`);
+                ns.print(`auth ${hostname} SUCCESS: ${pw}`);
                 return true;
             }
             const fb = String(r?.data || '');
@@ -224,7 +217,7 @@ async function authMastermind(ns, dnet, hostname, entry, l) {
             entry.password = pw;
             entry.session = true;
             delete entry._mmCandidates; delete entry._mmGuess;
-            log(ns, `auth ${hostname} SUCCESS: ${pw}`);
+            ns.print(`auth ${hostname} SUCCESS: ${pw}`);
             return true;
         }
         const fb = (r.data || '0,0').split(',').map(Number);
@@ -236,7 +229,7 @@ async function authMastermind(ns, dnet, hostname, entry, l) {
                 getMastermindScore(pw, c)[1] === wrongPos
             );
             entry._mmGuess = 0;
-            log(ns, `${hostname}: ${pw} -> (${exact},${wrongPos}) narrowed to ${entry._mmCandidates.length}`);
+            ns.print(`${hostname}: ${pw} -> (${exact},${wrongPos}) narrowed to ${entry._mmCandidates.length}`);
             return false;
         }
         await ns.sleep(50);
@@ -265,7 +258,7 @@ async function authNIL(ns, dnet, hostname, entry, l) {
             entry.password = pw;
             entry.session = true;
             delete entry._nilLocked; delete entry._nilDigit; delete entry._nilPos;
-            log(ns, `auth ${hostname} SUCCESS: ${pw}`);
+            ns.print(`auth ${hostname} SUCCESS: ${pw}`);
             return true;
         }
         // If final guess fails, reset and try different approach
@@ -285,7 +278,7 @@ async function authNIL(ns, dnet, hostname, entry, l) {
         entry.password = pw;
         entry.session = true;
         delete entry._nilLocked; delete entry._nilDigit; delete entry._nilPos;
-        log(ns, `auth ${hostname} SUCCESS: ${pw}`);
+        ns.print(`auth ${hostname} SUCCESS: ${pw}`);
         return true;
     }
 
@@ -394,7 +387,7 @@ async function authOpenWeb(ns, dnet, hostname, entry, l) {
             entry.password = pw;
             entry.session = true;
             delete entry._owClues; delete entry._owCandidates; delete entry._owIdx; delete entry._owLastGuess;
-            log(ns, `auth ${hostname} SUCCESS: ${pw}`);
+            ns.print(`auth ${hostname} SUCCESS: ${pw}`);
             return true;
         }
         await ns.sleep(50);
@@ -559,12 +552,12 @@ async function deployWorm(ns, hostname, entry, details) {
             if (!fresh.isConnectedToCurrentServer) {
                 entry._execFails = (entry._execFails || 0) + 1;
                 if (entry._execFails % 5 === 0)
-                    log(ns, `exec to ${hostname}: not connected (skipped x${entry._execFails})`);
+                    ns.print(`exec to ${hostname}: not connected (skipped x${entry._execFails})`);
                 return;
             }
         }
         ns.scp(ns.getScriptName(), hostname);
-        ns.scp(['darknet-looter.js', 'darknet-virus.js', 'crackers.js', 'helpers.js'], hostname, ns.getHostname());
+        ns.scp(['darknet-looter.js', 'darknet-virus.js', 'crackers.js'], hostname, ns.getHostname());
         const pid = ns.exec(ns.getScriptName(), hostname, { preventDuplicates: true });
         if (pid) {
             ns.exec('darknet-looter.js', hostname, { preventDuplicates: true });
@@ -574,9 +567,9 @@ async function deployWorm(ns, hostname, entry, details) {
                 ns.exec('labyrinth.js', hostname, 1);
             }
             entry.deployed = true;
-            log(ns, `deployed to ${hostname} (pid ${pid})`);
+            ns.print(`deployed to ${hostname} (pid ${pid})`);
         }
-    } catch (e) { log(ns, `deploy ${hostname} err: ${e}`); }
+    } catch (e) { ns.print(`deploy ${hostname} err: ${e}`); }
 }
 
 function permute(arr) {
