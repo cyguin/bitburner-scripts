@@ -563,8 +563,14 @@ async function deployWorm(ns, hostname, entry, details) {
                 ns.exec('labyrinth.js', hostname, 1);
             }
             entry.deployed = true;
+            log(ns, `deployed to ${hostname} (pid ${pid})`);
+        } else {
+            // Exec failed — server disconnected during auth, or no RAM
+            entry._execFails = (entry._execFails || 0) + 1;
+            if (entry._execFails % 5 === 0)
+                log(ns, `exec to ${hostname} failed x${entry._execFails} (disconnected or no RAM)`);
         }
-    } catch {}
+    } catch (e) { log(ns, `deploy ${hostname} err: ${e}`); }
 }
 
 function permute(arr) {
