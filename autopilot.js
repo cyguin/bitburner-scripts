@@ -566,7 +566,7 @@ export async function main(ns) {
         if ((10 in unlockedSFs) && (2 in unlockedSFs) && !findScript('sleeve.js')) {
             let sleeveArgs = [];
             if (!options["disable-casino"] && !ranCasino)
-                sleeveArgs.push("--training-reserve", 300000); // Avoid training away our casino seed money
+                sleeveArgs.push("--training-reserve", resetInfo.currentNode == 12 ? 0 : 300000); // BN12: money is too slow, let sleeves train immediately
             if (options["disable-bladeburner"])
                 sleeveArgs.push("--disable-bladeburner");
             launchScriptHelper(ns, 'sleeve.js', sleeveArgs);
