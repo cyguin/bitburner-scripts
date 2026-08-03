@@ -552,6 +552,17 @@ function modInverse(a, m) {
 
 async function deployWorm(ns, hostname, entry, details) {
     try {
+        // Re-check connection before exec — darknet topology and serversOnNetwork can diverge after mutations.
+        const dnet = ns.dnet;
+        if (dnet) {
+            const fresh = dnet.getServerDetails(hostname);
+            if (!fresh.isConnectedToCurrentServer) {
+                entry._execFails = (entry._execFails || 0) + 1;
+                if (entry._execFails % 5 === 0)
+                    log(ns, `exec to ${hostname}: not connected (skipped x${entry._execFails})`);
+                return;
+            }
+        }
         ns.scp(ns.getScriptName(), hostname);
         ns.scp(['darknet-looter.js', 'darknet-virus.js', 'crackers.js', 'helpers.js'], hostname, ns.getHostname());
         const pid = ns.exec(ns.getScriptName(), hostname, { preventDuplicates: true });
@@ -564,11 +575,6 @@ async function deployWorm(ns, hostname, entry, details) {
             }
             entry.deployed = true;
             log(ns, `deployed to ${hostname} (pid ${pid})`);
-        } else {
-            // Exec failed — server disconnected during auth, or no RAM
-            entry._execFails = (entry._execFails || 0) + 1;
-            if (entry._execFails % 5 === 0)
-                log(ns, `exec to ${hostname} failed x${entry._execFails} (disconnected or no RAM)`);
         }
     } catch (e) { log(ns, `deploy ${hostname} err: ${e}`); }
 }
