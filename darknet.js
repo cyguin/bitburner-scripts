@@ -87,6 +87,12 @@ export async function main(ns) {
                         ns.exec(ns.getScriptName(), hostname, { preventDuplicates: true });
                         ns.exec('darknet-looter.js', hostname, { preventDuplicates: true });
                         ns.exec('darknet-virus.js', hostname, { preventDuplicates: true });
+                        // Deploy labyrinth solver to labyrinth servers
+                        if (details.modelId === '(The Labyrinth)') {
+                            ns.scp('labyrinth.js', hostname, ns.getHostname());
+                            ns.exec('labyrinth.js', hostname, 1);
+                            log(ns, `labyrinth solver deployed to ${hostname}`);
+                        }
                         cache[hostname].deployed = true;
                         log(ns, `deployed to ${hostname}`);
                     } catch {}
