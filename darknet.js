@@ -49,7 +49,10 @@ export async function main(ns) {
                         || details.modelId === 'NIL' || details.modelId === 'OpenWebAccessPoint'
                         || details.modelId === 'Pr0verFl0' || details.modelId === 'Factori-Os'
                         || details.modelId === 'BigMo%od' || details.modelId === 'KingOfTheHill') {
-                        await authInteractive(ns, dnet, hostname, cache[hostname], details);
+                        const authed = await authInteractive(ns, dnet, hostname, cache[hostname], details);
+                        if (authed && !cache[hostname].deployed) {
+                            await deployWorm(ns, hostname, cache[hostname], details);
+                        }
                     } else {
                     const candidates = getCandidates(
                         details.modelId, details.passwordHint || '',
@@ -68,6 +71,11 @@ export async function main(ns) {
                             cache[hostname].password = pw;
                             cache[hostname].session = true;
                             log(ns, `auth ${hostname} SUCCESS (${i + 1}/${attempts})`);
+                            // Spread immediately — darknet topology mutates every 30s, exec must
+                            // happen before the connection drops
+                            if (!cache[hostname].deployed) {
+                                await deployWorm(ns, hostname, cache[hostname], details);
+                            }
                             break;
                         }
                         await ns.sleep(50);
@@ -77,26 +85,6 @@ export async function main(ns) {
                         cache[hostname]._loggedFail = true;
                     }
                     } // end else (non-interactive auth)
-                }
-
-                // Spread this script to newly-authed servers
-                if (cache[hostname].session && !cache[hostname].deployed) {
-                    try {
-                        ns.scp(ns.getScriptName(), hostname);
-                        ns.scp(['darknet-looter.js', 'darknet-virus.js', 'crackers.js', 'helpers.js'], hostname, ns.getHostname());
-                        ns.exec(ns.getScriptName(), hostname, { preventDuplicates: true });
-                        ns.exec('darknet-looter.js', hostname, { preventDuplicates: true });
-                        ns.exec('darknet-virus.js', hostname, { preventDuplicates: true });
-                        // Deploy labyrinth solver to labyrinth servers
-                        if (details.modelId === '(The Labyrinth)') {
-                            ns.scp('labyrinth.js', hostname, ns.getHostname());
-                            ns.exec('labyrinth.js', hostname, 1);
-                            log(ns, `labyrinth solver deployed to ${hostname}`);
-                        }
-                        cache[hostname].deployed = true;
-                        log(ns, `deployed to ${hostname}`);
-                    } catch {}
-                }
             }
 
             // Server-local ops
@@ -560,6 +548,23 @@ function modInverse(a, m) {
         [x0, x1] = [x1 - q * x0, x0];
     }
     return x1 < 0 ? x1 + m0 : x1;
+}
+
+async function deployWorm(ns, hostname, entry, details) {
+    try {
+        ns.scp(ns.getScriptName(), hostname);
+        ns.scp(['darknet-looter.js', 'darknet-virus.js', 'crackers.js', 'helpers.js'], hostname, ns.getHostname());
+        const pid = ns.exec(ns.getScriptName(), hostname, { preventDuplicates: true });
+        if (pid) {
+            ns.exec('darknet-looter.js', hostname, { preventDuplicates: true });
+            ns.exec('darknet-virus.js', hostname, { preventDuplicates: true });
+            if (details?.modelId === '(The Labyrinth)') {
+                ns.scp('labyrinth.js', hostname, ns.getHostname());
+                ns.exec('labyrinth.js', hostname, 1);
+            }
+            entry.deployed = true;
+        }
+    } catch {}
 }
 
 function permute(arr) {
