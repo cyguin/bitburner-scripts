@@ -587,8 +587,11 @@ export async function main(ns) {
                             await dnet.authenticate(entry, '');
                             ns.scp(['darknet.js', 'darknet-looter.js', 'darknet-virus.js',
                                     'crackers.js', 'helpers.js'], entry, 'home');
-                            ns.exec('darknet.js', entry, 1);
-                            log(ns, `Darknet worm deployed to ${entry}`);
+                            const pid = ns.exec('darknet.js', entry, 1);
+                            if (pid)
+                                log(ns, `Darknet worm deployed to ${entry} (pid ${pid})`);
+                            else
+                                log(ns, `Darknet exec to ${entry} FAILED (pid 0)`);
                         }
                     }
                 } catch (e) { log(ns, `Darknet deploy: ${e?.message || e}`); }
