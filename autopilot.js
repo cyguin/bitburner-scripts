@@ -414,9 +414,12 @@ export async function main(ns) {
                 `ns.bladeburner.getActionCountRemaining('Black Operations', 'Operation Daedalus') === 0`,
                 '/Temp/bladeburner-completed.txt');
 
-        // HEURISTIC: If we naturally get within 75% of the if w0r1d_d43m0n hack stat requirement,
+        // BN12: hacking w0r1d_d43m0n is the objective, so always prioritize WD hack exp there.
+        // Otherwise, if we naturally get within 75% of the w0r1d_d43m0n hack stat requirement,
         //    switch daemon.js to prioritize earning hack exp for the remainder of the BN
-        if (player.skills.hacking >= (wdHack * 0.75))
+        if (resetInfo.currentNode == 12)
+            prioritizeHackForWd = true;
+        else if (player.skills.hacking >= (wdHack * 0.75))
             prioritizeHackForWd = !bnComplete;
 
         if (!bnComplete) return false; // No win conditions met
@@ -477,22 +480,34 @@ export async function main(ns) {
         pid = launchScriptHelper(ns, '/Tasks/crack-host.js', ['w0r1d_d43m0n']);
         if (pid) await waitForProcessToComplete(ns, pid);
 
-        // BN12: installAugmentations stays in the recursion loop
+        // BN12: installAugmentations stays in the recursion loop (never destroy the BN).
+        // Only attempt an install if we actually have queued augmentations — otherwise
+        // installAugmentations() returns false and we'd spam the failed-reset loop forever
+        // while the daemon should instead be hacking w0r1d_d43m0n for XP.
+        let resetAction = 'destroyW0r1dD43m0n';
         if (resetInfo.currentNode == 12) {
-            pid = await runCommand(ns, `ns.singularity.installAugmentations(ns.args[0])`,
-                '/Temp/singularity-install-augs.js', [`BN12-${(dictOwnedSourceFiles[12] || 0) + 1}`]);
+            resetAction = 'installAugmentations';
+            const queuedAugCount = await getNsDataThroughFile(ns,
+                'ns.singularity.getOwnedAugmentations(true).length - ns.singularity.getOwnedAugmentations(false).length',
+                '/Temp/queued-aug-count.txt');
+            if (queuedAugCount > 0) {
+                pid = await runCommand(ns, `ns.singularity.installAugmentations(ns.args[0])`,
+                    '/Temp/singularity-install-augs.js', [`BN12-${(dictOwnedSourceFiles[12] || 0) + 1}`]);
+            } else {
+                log(ns, `BN12: No augmentations queued to install (${queuedAugCount}). Continuing to hack w0r1d_d43m0n for XP...`, true, 'info');
+            }
         } else {
             pid = await runCommand(ns, `ns.singularity.destroyW0r1dD43m0n(ns.args[0], ns.args[1]` +
                 `, { sourceFileOverrides: new Map() }` +
                 `)`, '/Temp/singularity-destroyW0r1dD43m0n.js', [nextBn, ns.getScriptName()]);
         }
         if (pid) {
-            log(ns, `SUCCESS: Initiated process ${pid} to execute 'singularity.destroyW0r1dD43m0n' with args: [${nextBn}, ${ns.getScriptName()}]`, true, 'success')
+            log(ns, `SUCCESS: Initiated process ${pid} to execute 'singularity.${resetAction}' with args: [${nextBn}, ${ns.getScriptName()}]`, true, 'success')
             await waitForProcessToComplete(ns, pid);
             log(ns, `WARNING: Process is done running, why am I still here? Sleeping 10 seconds...`, true, 'error')
             await ns.sleep(10000);
+            persist_log(ns, log(ns, `ERROR: Tried to ${resetAction == 'installAugmentations' ? 'install augmentations' : 'destroy the bitnode'} (pid=${pid}), but we're still here...`, true, 'error'));
         }
-        persist_log(ns, log(ns, `ERROR: Tried destroy the bitnode (pid=${pid}), but we're still here...`, true, 'error'));
         //return bnCompletionSuppressed = true; // Don't suppress bn Completion, try again on our next loop.
     }
 
@@ -678,6 +693,12 @@ export async function main(ns) {
             } else if (player.skills.hacking >= hackThreshold) { // "tight" mode. Tighter batches to increase income rate, at the cost of more frequent misfires
                 daemonArgs = ["--cycle-timing-delay", 40, "--queue-delay", 50, "--silent-misfires",
                     "--recovery-thread-padding", Math.min(5.0, player.skills.hacking / hackThreshold)]; // Use more recovery thread padding as our hack level increases
+                // BN12: tight mode normally shadows the xp-only branch below once hack >= hackThreshold,
+                // but hacking w0r1d_d43m0n is the objective in BN12, so keep daemon in XP mode targeting it.
+                if (prioritizeHackForWd || prioritizeHackForDaedalus || resetInfo.currentNode == 12) {
+                    daemonArgs.push("--xp-only", "--no-share");
+                    daemonRelaunchMessage ??= `BN12: Running daemon.js in --xp-only mode to prioritize hacking w0r1d_d43m0n for XP.`;
+                }
             }
             else if (homeRam < 32) { // If we're in early BN 1.1 (i.e. with < 32GB home RAM), avoid squandering RAM
                 daemonArgs.push("--no-share", "--initial-max-targets", 1);
