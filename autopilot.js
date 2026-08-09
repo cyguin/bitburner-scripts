@@ -108,6 +108,7 @@ export async function main(ns) {
     let bnCompletionSuppressed = false; // Flag if we've detected that we've won the BN, but are suppressing a restart
     let sleevesMaxedOut = false; // Flag used only when the player is replaying BN 10 with all sleeves but has suppressed auto-destroying the BN, to allow continued auto-installs
     let loggedBnCompletion = false; // Flag set to ensure that if we choose to stay in the BN, we only log the "BN completed" message once per reset.
+    let loggedNoQueuedAugs = false; // Flag set so the BN12 "nothing to install" message only logs once per reset.
     let have4STixApi = false; // Whether we have access to the 4S (stockmarket) API. Once confirmed true, we can stop checking.
     let have4SData = false; // Whether we have access to 4S (stockmarket) data. Once confirmed true, we can stop checking.
 
@@ -484,6 +485,7 @@ export async function main(ns) {
         // Only attempt an install if we actually have queued augmentations — otherwise
         // installAugmentations() returns false and we'd spam the failed-reset loop forever
         // while the daemon should instead be hacking w0r1d_d43m0n for XP.
+        pid = 0; // Clear the stale cleanup/crack-host pid so the block below only fires if we actually initiate a reset.
         let resetAction = 'destroyW0r1dD43m0n';
         if (resetInfo.currentNode == 12) {
             resetAction = 'installAugmentations';
@@ -493,7 +495,9 @@ export async function main(ns) {
             if (queuedAugCount > 0) {
                 pid = await runCommand(ns, `ns.singularity.installAugmentations(ns.args[0])`,
                     '/Temp/singularity-install-augs.js', [`BN12-${(dictOwnedSourceFiles[12] || 0) + 1}`]);
-            } else {
+                loggedNoQueuedAugs = false; // Reset the flag so we re-log if we drop back to 0 later
+            } else if (!loggedNoQueuedAugs) {
+                loggedNoQueuedAugs = true; // Only log this once per reset to avoid spamming the log every loop
                 log(ns, `BN12: No augmentations queued to install (${queuedAugCount}). Continuing to hack w0r1d_d43m0n for XP...`, true, 'info');
             }
         } else {
