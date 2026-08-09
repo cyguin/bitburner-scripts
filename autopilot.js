@@ -473,6 +473,23 @@ export async function main(ns) {
             return bnCompletionSuppressed = true;
         }
 
+        // BN12: never destroy the BN — installAugmentations keeps the recursion loop going.
+        // Only bother with cleanup/crack-host/install if we actually have augmentations queued;
+        // otherwise keep hacking w0r1d_d43m0n for XP and skip the reset busywork entirely.
+        if (resetInfo.currentNode == 12) {
+            const queuedAugCount = await getNsDataThroughFile(ns,
+                'ns.singularity.getOwnedAugmentations(true).length - ns.singularity.getOwnedAugmentations(false).length',
+                '/Temp/queued-aug-count.txt');
+            if (queuedAugCount <= 0) {
+                if (!loggedNoQueuedAugs) {
+                    loggedNoQueuedAugs = true; // Only log this once per reset to avoid spamming the log every loop
+                    log(ns, `BN12: No augmentations queued to install (${queuedAugCount}). Continuing to hack w0r1d_d43m0n for XP...`, true, 'info');
+                }
+                return false; // Nothing to install — skip the reset busywork and keep grinding WD XP
+            }
+            loggedNoQueuedAugs = false; // Reset the flag so we re-log if we drop back to 0 later
+        }
+
         // Clean out our temp folder and flags so we don't have any stale data when the next BN starts.
         let pid = launchScriptHelper(ns, 'cleanup.js');
         if (pid) await waitForProcessToComplete(ns, pid);
@@ -481,25 +498,12 @@ export async function main(ns) {
         pid = launchScriptHelper(ns, '/Tasks/crack-host.js', ['w0r1d_d43m0n']);
         if (pid) await waitForProcessToComplete(ns, pid);
 
-        // BN12: installAugmentations stays in the recursion loop (never destroy the BN).
-        // Only attempt an install if we actually have queued augmentations — otherwise
-        // installAugmentations() returns false and we'd spam the failed-reset loop forever
-        // while the daemon should instead be hacking w0r1d_d43m0n for XP.
-        pid = 0; // Clear the stale cleanup/crack-host pid so the block below only fires if we actually initiate a reset.
+        // We're actually resetting now, so initiate the appropriate action.
         let resetAction = 'destroyW0r1dD43m0n';
         if (resetInfo.currentNode == 12) {
             resetAction = 'installAugmentations';
-            const queuedAugCount = await getNsDataThroughFile(ns,
-                'ns.singularity.getOwnedAugmentations(true).length - ns.singularity.getOwnedAugmentations(false).length',
-                '/Temp/queued-aug-count.txt');
-            if (queuedAugCount > 0) {
-                pid = await runCommand(ns, `ns.singularity.installAugmentations(ns.args[0])`,
-                    '/Temp/singularity-install-augs.js', [`BN12-${(dictOwnedSourceFiles[12] || 0) + 1}`]);
-                loggedNoQueuedAugs = false; // Reset the flag so we re-log if we drop back to 0 later
-            } else if (!loggedNoQueuedAugs) {
-                loggedNoQueuedAugs = true; // Only log this once per reset to avoid spamming the log every loop
-                log(ns, `BN12: No augmentations queued to install (${queuedAugCount}). Continuing to hack w0r1d_d43m0n for XP...`, true, 'info');
-            }
+            pid = await runCommand(ns, `ns.singularity.installAugmentations(ns.args[0])`,
+                '/Temp/singularity-install-augs.js', [`BN12-${(dictOwnedSourceFiles[12] || 0) + 1}`]);
         } else {
             pid = await runCommand(ns, `ns.singularity.destroyW0r1dD43m0n(ns.args[0], ns.args[1]` +
                 `, { sourceFileOverrides: new Map() }` +
