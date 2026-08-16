@@ -11,6 +11,7 @@ Forked from [Alain Bryden's repo](https://github.com/alainbryden/bitburner-scrip
 - [BN12 recursion](#bn12-recursion)
 - [running daemon directly at deep BN12](#running-daemon-directly-at-deep-bn12)
 - [BN13 (They're lunatics)](#bn13-theyre-lunatics)
+- [BN14 (IPvGO Subnet Takeover)](#bn14-ipvgo-subnet-takeover)
 - [upstream vs fork](#upstream-vs-fork)
 - [credits](#credits)
 
@@ -31,7 +32,7 @@ Forked from [Alain Bryden's repo](https://github.com/alainbryden/bitburner-scrip
 - **Darknet propagation speed.** The darknet network mutates every cycle based on `MS_PER_MUTATION_PER_ROW / MilliPerCycle`. At high game speed, servers disconnect faster than auth can complete (interactive solvers take 5-10 seconds per server). Spread to neighbor servers requires the target to be in the source's `serversOnNetwork` at the exact moment `ns.exec()` fires. SCP always works (any distance with session), but exec requires direct connection in the server network topology. If the server moves during auth window, exec returns 0 and spread fails. The worm retries on next cycle.
 - **Darknet RAM limits.** Depth 0-5 servers have 16GB max RAM. darknet.js + crackers.js ~6.5GB. Deeper servers have 32GB+.
 - **Labyrinth charisma requirement.** Some labyrinth servers require higher charisma than what you have at early installs. The solver retries after each install cycle.
-- **BN13/14.** No per-BN strategy logic yet. BN13 runs on generic autopilot behavior, leaning on the shared Stanek's Gift handling (see the BN13 section); BN14 falls back to standard daemon behavior. Both are in the default BN order.
+- **BN13/14.** No per-BN strategy logic yet. BN13 runs on generic autopilot behavior, leaning on the shared Stanek's Gift handling (see the BN13 section); BN14 relies on `go.js` (driven by the daemon) for IPvGO — see the BN14 section. Both are in the default BN order.
 - **Darknet state corruption.** Rare save-game issue where `DarknetState` becomes corrupted. Only fix is an augment install to regenerate the network.
 
 ## quick start
@@ -90,6 +91,20 @@ How autopilot handles it (no BN13-specific code — generic behavior plus the sh
 4. **Money mode until the end.** BN13's hack income (0.2x) is nonzero, so the daemon stays in money mode; once hacking reaches 75% of the WD requirement it flips to `--xp-only` to close the last stretch (the generic WD-priority heuristic in autopilot).
 
 Expect a slow run — the crippled multipliers make even a maxed-SF pass a genuine grind. The payout is the biggest, strongest gift you'll ever own, which is exactly why 13.3 comes right before the BN12 recursion endgame.
+
+## BN14 (IPvGO Subnet Takeover)
+
+BN14 is the Go / IPvGO BitNode. The whole point is the Go game: `GoPower: 4` makes each point of Node Power worth 4x the usual stat multiplier, so playing IPvGO is the fastest source of raw stats in the game. The win is the standard WD backdoor at `3000 × WorldDaemonDifficulty(5) = 15,000` hacking.
+
+How autopilot handles it (no BN14-specific code — `go.js` is inherited from alain and driven by the daemon):
+
+1. **`go.js` plays IPvGO automatically.** The daemon launches it whenever home RAM allows (`daemon.js`: ~20GB minimum, 64GB to run at full speed). Node Power scales into hack/combat multipliers — the main way BN14 fights back against its nerfs.
+2. **Stanek's Gift is skipped.** BN14 nerfs the gift (`StaneksGiftPowerMultiplier: 0.5`, `StaneksGiftExtraSize: -1`), and `maybeAcceptStaneksGift` bails out on negative extra-size — no point accepting a shrunken gift.
+3. **Money-mode daemon + normal faction work** for the aug grind, then the generic `--xp-only` push once hacking reaches 75% of the 15,000 WD requirement.
+
+The nerfs are real but not the worst: hacking level ×0.4, hacking speed ×0.3, hack income ×0.3, crime success ×0.4 — and, the brutal one, faction work rep ×0.2 (company rep ×0.2 too), so rep-gated augs come slow. Aug cost is ×1.5. Corporation (×0.4), bladeburner (×0.6), and gangs (×0.7) are all playable but not worth leaning on.
+
+SF14 rewards: level 1 doubles the stat-multiplier payoff of Node Power, level 2 unlocks the `go.cheat` API, level 3 adds +25% cheat success and raises the max Go favour. The default BN order plays 14.2 and 14.3 mid-order; `go.js` works from BN1.1 onward regardless, so the gift of SF14 just makes the already-running Go loop stronger.
 
 ## upstream vs fork
 
