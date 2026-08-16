@@ -19,7 +19,7 @@ Forked from [Alain Bryden's repo](https://github.com/alainbryden/bitburner-scrip
 - **Darknet propagation speed.** The darknet network mutates every cycle based on `MS_PER_MUTATION_PER_ROW / MilliPerCycle`. At high game speed, servers disconnect faster than auth can complete (interactive solvers take 5-10 seconds per server). Spread to neighbor servers requires the target to be in the source's `serversOnNetwork` at the exact moment `ns.exec()` fires. SCP always works (any distance with session), but exec requires direct connection in the server network topology. If the server moves during auth window, exec returns 0 and spread fails. The worm retries on next cycle.
 - **Darknet RAM limits.** Depth 0-5 servers have 16GB max RAM. darknet.js + crackers.js ~6.5GB. Deeper servers have 32GB+.
 - **Labyrinth charisma requirement.** Some labyrinth servers require higher charisma than what you have at early installs. The solver retries after each install cycle.
-- **BN13/14.** No per-BN strategy logic yet. Both are in the default BN order and fall back to standard daemon behavior.
+- **BN13/14.** No per-BN strategy logic yet. BN13 runs on generic autopilot behavior, leaning on the shared Stanek's Gift handling (see the BN13 section); BN14 falls back to standard daemon behavior. Both are in the default BN order.
 - **Darknet state corruption.** Rare save-game issue where `DarknetState` becomes corrupted. Only fix is an augment install to regenerate the network.
 
 ## quick start
@@ -61,6 +61,23 @@ Deep-BN12 tweaks:
 ```
 run daemon.js --xp-only --cycle-timing-delay 40 --queue-delay 50 --silent-misfires --recovery-thread-padding 5 --no-tail-windows --reserved-ram 1e+100 --no-share --disable-script /Tasks/contractor.js --disable-script /Tasks/backdoor-all-servers.js --disable-script /Tasks/tor-manager.js --disable-script hacknet-upgrade-manager.js --disable-script host-manager.js --disable-script /Tasks/ram-manager.js
 ```
+
+## BN13 (They're lunatics)
+
+BN13 is the Stanek's Gift BitNode. The whole point is the Church of the Machine God's gift, which runs at **2x power and +1 extra size** here (`StaneksGiftPowerMultiplier: 2`, `StaneksGiftExtraSize: 1`) — and SF13.3 (maxed) makes the grid bigger still. The win is the standard WD backdoor, and WD only asks for `3000 × WorldDaemonDifficulty(3) = 9000` hacking. The grind getting there is the slow part:
+
+- Hacking levels grow 4x slower (`HackingLevelMultiplier: 0.25`), hack exp is 0.1x, hack income 0.2x, faction work rep 0.6x.
+- Corporation is dead (0.001x valuation), bladeburner is slow (0.45x rank), gang is weak (0.3x softcap).
+- The default BN order plays `13.1` to unlock the gift and `13.3` to max the grid — 13.3 sits right before the BN12 forever-loop because the maxed gift is the best long-term multiplier engine.
+
+How autopilot handles it (no BN13-specific code — generic behavior plus the shared Stanek handling):
+
+1. **Accept the gift on the first tick.** `maybeAcceptStaneksGift` fires before anything can buy an aug, and the game only allows acceptance with zero non-NeuroFlux augs installed **or queued** (`canAcceptStaneksGift`) — a single purchase locks you out for the rest of the BN. `faction-manager.js` refuses to buy augs while the gift is unaccepted (bypass with `--ignore-stanek`).
+2. **`ns.stanek.acceptGift()` auto-joins CotMG** and installs "Stanek's Gift - Genesis" (0 rep, 0 cost) — no Chongqing trip or invite needed. The other two gift augs are purchased normally from the church: "Stanek's Gift - Awakening" (1M rep) and "Stanek's Gift - Serenity".
+3. **`stanek.js` charges fragments** once Genesis is installed, so the 2x gift boost is live for the whole grind.
+4. **Money mode until the end.** BN13's hack income (0.2x) is nonzero, so the daemon stays in money mode; once hacking reaches 75% of the WD requirement it flips to `--xp-only` to close the last stretch (the generic WD-priority heuristic in autopilot).
+
+Expect a slow run — the crippled multipliers make even a maxed-SF pass a genuine grind. The payout is the biggest, strongest gift you'll ever own, which is exactly why 13.3 comes right before the BN12 recursion endgame.
 
 ## upstream vs fork
 
