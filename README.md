@@ -62,6 +62,34 @@ Deep-BN12 tweaks:
 run daemon.js --xp-only --cycle-timing-delay 40 --queue-delay 50 --silent-misfires --recovery-thread-padding 5 --no-tail-windows --reserved-ram 1e+100 --no-share --disable-script /Tasks/contractor.js --disable-script /Tasks/backdoor-all-servers.js --disable-script /Tasks/tor-manager.js --disable-script hacknet-upgrade-manager.js --disable-script host-manager.js --disable-script /Tasks/ram-manager.js
 ```
 
+## upstream vs fork
+
+Anything not listed here is **byte-for-byte [Alain Bryden's upstream code](https://github.com/alainbryden/bitburner-scripts)** — `daemon.js`, `helpers.js`, `faction-manager.js`, `work-for-factions.js`, `casino.js`, `stockmaster.js`, `gangs.js`, `bladeburner.js`, `sleeve.js`, `stanek.js`, `go.js`, `host-manager.js`, `ascend.js`, `hacknet-upgrade-manager.js`, `scan.js`, and everything under `Tasks/` and `Remote/`. Treat those as the unmodified foundation.
+
+Cyguin's code begins at:
+
+**Forked from alain, but rewritten:**
+
+| file | what changed |
+| --- | --- |
+| `autopilot.js` | The only upstream script meaningfully rewritten. BN12 recursion loop (xp-only daemon → install queued augs → rejoin via `destroyW0r1dD43m0n(12)` when queue empty), BN15 darknet worm deploy + modal suppression, casino recovery, headless defaults. |
+| `git-pull.js` | Repointed from alainbryden to this repo (`cyguin/bitburner-scripts`). |
+| `README.md` | This file. |
+
+**New files — no upstream counterpart (all BN15 darknet unless noted):**
+
+| file | purpose |
+| --- | --- |
+| `darknet.js` | Self-propagating worm. Stripped to ~25KB (imports only `crackers.js`, not `helpers.js`) so exec fits the 16GB depth-0-5 servers. |
+| `crackers.js` | Static-model password solvers + common passwords. |
+| `darknet-looter.js` | `.cache` opening + phishing. |
+| `darknet-virus.js` | Heartbleed password harvesting. |
+| `labyrinth.js` | BFS maze solver for labyrinth servers. |
+| `bn15-sidecar.js` | WD hacking after TRP is found. |
+| `download.js` | `raw.githubusercontent.com` downloader — no GitHub API, no rate limits; full-repo restore with no args. |
+| `cheat-tool.js` | Dev tool. Not for normal play. |
+| `cyguin-theme.json` | Dark theme; paste into Bitburner Settings → Theme Editor. |
+
 ## credits
 
 Alain Bryden wrote all the hard code. This fork exists because his scripts are worth building on.
