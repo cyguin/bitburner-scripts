@@ -108,7 +108,6 @@ export async function main(ns) {
     let bnCompletionSuppressed = false; // Flag if we've detected that we've won the BN, but are suppressing a restart
     let sleevesMaxedOut = false; // Flag used only when the player is replaying BN 10 with all sleeves but has suppressed auto-destroying the BN, to allow continued auto-installs
     let loggedBnCompletion = false; // Flag set to ensure that if we choose to stay in the BN, we only log the "BN completed" message once per reset.
-    let loggedNoQueuedAugs = false; // Flag set so the BN12 "nothing to install" message only logs once per reset.
     let have4STixApi = false; // Whether we have access to the 4S (stockmarket) API. Once confirmed true, we can stop checking.
     let have4SData = false; // Whether we have access to 4S (stockmarket) data. Once confirmed true, we can stop checking.
 
@@ -473,21 +472,16 @@ export async function main(ns) {
             return bnCompletionSuppressed = true;
         }
 
-        // BN12: never destroy the BN — installAugmentations keeps the recursion loop going.
-        // Only bother with cleanup/crack-host/install if we actually have augmentations queued;
-        // otherwise keep hacking w0r1d_d43m0n for XP and skip the reset busywork entirely.
+        // BN12: the recursion loop is driven by rejoining — destroying w0r1d_d43m0n via
+        // singularity.destroyW0r1dD43m0n(12) re-enters BN12 with +1 SF level (no max for BN12),
+        // which is how we keep climbing ("12.9999: keep playing forever").
+        // If we have augmentations queued, install them first (plain prestige, keeps purchased augs);
+        // once the queue is empty, rejoin to advance the recursion.
+        let queuedAugCount = 0;
         if (resetInfo.currentNode == 12) {
-            const queuedAugCount = await getNsDataThroughFile(ns,
+            queuedAugCount = await getNsDataThroughFile(ns,
                 'ns.singularity.getOwnedAugmentations(true).length - ns.singularity.getOwnedAugmentations(false).length',
                 '/Temp/queued-aug-count.txt');
-            if (queuedAugCount <= 0) {
-                if (!loggedNoQueuedAugs) {
-                    loggedNoQueuedAugs = true; // Only log this once per reset to avoid spamming the log every loop
-                    log(ns, `BN12: No augmentations queued to install (${queuedAugCount}). Continuing to hack w0r1d_d43m0n for XP...`, true, 'info');
-                }
-                return false; // Nothing to install — skip the reset busywork and keep grinding WD XP
-            }
-            loggedNoQueuedAugs = false; // Reset the flag so we re-log if we drop back to 0 later
         }
 
         // Clean out our temp folder and flags so we don't have any stale data when the next BN starts.
@@ -500,23 +494,27 @@ export async function main(ns) {
 
         // We're actually resetting now, so initiate the appropriate action.
         let resetAction = 'destroyW0r1dD43m0n';
-        if (resetInfo.currentNode == 12) {
+        let resetArgs = [nextBn, ns.getScriptName()];
+        if (resetInfo.currentNode == 12 && queuedAugCount > 0) {
+            // Install queued augs (plain prestige within BN12). The callback relaunches autopilot.
             resetAction = 'installAugmentations';
+            resetArgs = [ns.getScriptName()];
             pid = await runCommand(ns, `ns.singularity.installAugmentations(ns.args[0])`,
-                '/Temp/singularity-install-augs.js', [`BN12-${(dictOwnedSourceFiles[12] || 0) + 1}`]);
+                '/Temp/singularity-install-augs.js', resetArgs);
         } else {
+            // Rejoin BN12 (destroyW0r1dD43m0n with nextBN=12) — gives +1 SF12 each cycle, forever.
             pid = await runCommand(ns, `ns.singularity.destroyW0r1dD43m0n(ns.args[0], ns.args[1]` +
                 `, { sourceFileOverrides: new Map() }` +
-                `)`, '/Temp/singularity-destroyW0r1dD43m0n.js', [nextBn, ns.getScriptName()]);
+                `)`, '/Temp/singularity-destroyW0r1dD43m0n.js', resetArgs);
         }
         if (pid) {
-            log(ns, `SUCCESS: Initiated process ${pid} to execute 'singularity.${resetAction}' with args: [${nextBn}, ${ns.getScriptName()}]`, true, 'success')
+            log(ns, `SUCCESS: Initiated process ${pid} to execute 'singularity.${resetAction}' with args: [${resetArgs.join(', ')}]`, true, 'success')
             await waitForProcessToComplete(ns, pid);
             log(ns, `WARNING: Process is done running, why am I still here? Sleeping 10 seconds...`, true, 'error')
             await ns.sleep(10000);
-            persist_log(ns, log(ns, `ERROR: Tried to ${resetAction == 'installAugmentations' ? 'install augmentations' : 'destroy the bitnode'} (pid=${pid}), but we're still here...`, true, 'error'));
         }
         //return bnCompletionSuppressed = true; // Don't suppress bn Completion, try again on our next loop.
+        persist_log(ns, log(ns, `ERROR: Tried to ${resetAction == 'installAugmentations' ? 'install augmentations' : 'destroy the bitnode'} (pid=${pid}), but we're still here...`, true, 'error'));
     }
 
     /** Helper to get a list of all scripts running (on home)
