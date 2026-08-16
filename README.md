@@ -2,6 +2,18 @@
 
 Forked from [Alain Bryden's repo](https://github.com/alainbryden/bitburner-scripts).
 
+## index
+
+- [done](#done)
+- [limitations](#limitations)
+- [quick start](#quick-start)
+- [BN15 darknet](#bn15-darknet)
+- [BN12 recursion](#bn12-recursion)
+- [running daemon directly at deep BN12](#running-daemon-directly-at-deep-bn12)
+- [BN13 (They're lunatics)](#bn13-theyre-lunatics)
+- [upstream vs fork](#upstream-vs-fork)
+- [credits](#credits)
+
 ## done
 
 - BN12 recursion support. Autopilot stays in the loop: installs queued augs, then rejoins via `destroyW0r1dD43m0n(12)` once the queue is empty (each rejoin = +1 SF12, no max). Daemon runs xp-only targeting w0r1d_d43m0n. Disabled scripts: host-manager, hacknet-upgrade, contractor, deploy-scripts. Stockmaster gated on API cost.
