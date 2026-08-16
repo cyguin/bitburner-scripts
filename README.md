@@ -1,10 +1,13 @@
 # cyguin bitburner scripts
 
-Forked from [Alain Bryden's repo](https://github.com/alainbryden/bitburner-scripts).
+> Autopilot for [Bitburner](https://github.com/bitburner-official/bitburner-src). Forked from [Alain Bryden's repo](https://github.com/alainbryden/bitburner-scripts) with a hands-off BN12 recursion loop, Stanek's Gift handling, IPvGO, and a self-propagating BN15 darknet worm.
+
+---
 
 ## index
 
-- [done](#done)
+- [how the game works (spoilers)](#how-the-game-works-spoilers)
+- [features](#features)
 - [limitations](#limitations)
 - [quick start](#quick-start)
 - [BN12 recursion](#bn12-recursion)
@@ -15,16 +18,59 @@ Forked from [Alain Bryden's repo](https://github.com/alainbryden/bitburner-scrip
 - [upstream vs fork](#upstream-vs-fork)
 - [credits](#credits)
 
-## done
+---
 
-- BN12 recursion support. Autopilot stays in the loop: installs queued augs, then rejoins via `destroyW0r1dD43m0n(12)` once the queue is empty (each rejoin = +1 SF12, no max). Daemon runs xp-only targeting w0r1d_d43m0n. Disabled scripts: host-manager, hacknet-upgrade, contractor, deploy-scripts. Stockmaster gated on API cost.
-- BN15 DarkNet support. Autopilot deploys a self-propagating worm to darknet entry servers, pauses daemon during manual labyrinth play, and auto-installs augs when TRP is detected. BN15.1 in the default BN order. Bladeburner and host-manager disabled.
-- DarkNet worm has solvers for all 21 server models (interactive + static). Keys to making this work: AccountsManager_4.2 binary search with persisted lo/hi state, NIL positional yes/yesn't feedback, OpenWebAccessPoint heartbleed clue extraction, Pr0verFl0 buffer overflow, Factori-Os running product with repeated prime factors, BigMo%od CRT modulo reconstruction, KingOfTheHill three-phase hill climbing. crackers.js handles the 13 static models. Note: solver reliability at scale is untested — propagation is the real bottleneck.
-- DarkNet worm stripped to 25KB (imports only crackers.js, not helpers.js). Exec RAM dropped from ~17GB to ~6.5GB to fit within the 16GB limit on depth 0-5 darknet servers.
-- Labyrinth solver. BFS maze navigator using `dnet.authenticate()` with direction commands. Worm auto-deploys labyrinth.js to labyrinth servers upon auth.
-- Headless. No tail windows by default.
-- Dark theme. Paste `cyguin-theme.json` into Bitburner Settings -> Theme Editor.
-- Multiplier gating. Stockmaster skips when API costs are absurd. Daemon gates bladeburner, hacknet, and corp internally.
+## how the game works (spoilers)
+
+Everything below is spoiler territory — the bits of Bitburner this fork is built on top of. Skip it if you'd rather figure it out yourself.
+
+### completing a bitnode
+
+Every BitNode is won the same way: install a backdoor on `w0r1d_d43m0n` ("the World Daemon"). Backdoor it and the game routes you to the BitVerse, where you pick the next BitNode. Three ways to trigger it:
+
+- terminal `hack` on `w0r1d_d43m0n` (manual, or via `ns.singularity.installBackdoor`)
+- `ns.singularity.destroyW0r1dD43m0n(nextBN, callback)` — needs only **hack level ≥ the WD requirement and root on WD**. It does the backdoor, upgrades your Source-File, enters the next BitNode, and relaunches your callback script. This is what autopilot uses — no manual hack/rejoin step.
+
+The WD hack requirement is `3000 × WorldDaemonDifficulty`, and each BitNode sets its own multiplier: 1 for BN1/BN8, up to 5 for BN2/BN14, 3 for BN13, 2 for BN15, etc. BN12 scales it by `1.02^(level)` forever.
+
+### source files & bitnode levels
+
+Destroying a BitNode upgrades its Source-File by one level (cap 3 — except BN12, which has no cap). `BN12.335` = Source-File 12 at level 334 (displayed level = SF level + 1). Each SF level grants a permanent perk you keep in every future BitNode.
+
+### the red pill, then vs now
+
+Old versions: hacking the World Daemon queued "The Red Pill" augment, and installing it re-joined the BitNode. **Modern 3.x: hacking WD just sends you to the BitVerse — no Red Pill involved.** "The Red Pill" is now a Daedalus augment (2.5M rep, free), and in BN15 it can also be found in the darknet labyrinth. The "TRP loop" is gone; the reset is the rejoin itself.
+
+### neuroflux governor & the BN12 recursion
+
+NeuroFlux Governor is the infinitely-stackable augment: every level gives a small all-stat boost, but each purchase costs more. BN12's Source-File means every new BitNode starts you with NFG level = your SF12 level. So each BN12 rejoin gives +1 SF12 → +1 NFG → more stats → faster next cycle. That's the entire "12.9999 keep playing forever" endgame.
+
+### stanek's gift
+
+The Church of the Machine God's gift is a grid you charge with fragments for stat multipliers. You can only accept it while you have **zero non-NFG augmentations installed or queued** — buy anything first and you're locked out for that BN. Accepting auto-joins CotMG and installs the first augment free; the two upgrades are bought with rep.
+
+### ipvgo / node power (BN14)
+
+The Go minigame (IPvGO) awards Node Power, which converts into a stat multiplier. BN14 quadruples that payoff. SF14 level 1 doubles it again, level 2 unlocks the `go.cheat` API, level 3 adds +25% cheat success.
+
+### the darknet (BN15)
+
+The darknet is a shifting topology that mutates every cycle. Servers move and disconnect, so propagation has to authenticate and exec a worm onto a neighbor before it drifts away. The Red Pill is found at the bottom of the labyrinth.
+
+---
+
+## features
+
+- **BN12 recursion support.** Autopilot stays in the loop: installs queued augs, then rejoins via `destroyW0r1dD43m0n(12)` once the queue is empty (each rejoin = +1 SF12, no max). Daemon runs xp-only targeting w0r1d_d43m0n. Disabled scripts: host-manager, hacknet-upgrade, contractor, deploy-scripts. Stockmaster gated on API cost.
+- **BN15 DarkNet support.** Autopilot deploys a self-propagating worm to darknet entry servers, pauses daemon during manual labyrinth play, and auto-installs augs when TRP is detected. BN15.1 in the default BN order. Bladeburner and host-manager disabled.
+- **DarkNet worm solvers for all 21 server models** (interactive + static). Keys to making this work: AccountsManager_4.2 binary search with persisted lo/hi state, NIL positional yes/yesn't feedback, OpenWebAccessPoint heartbleed clue extraction, Pr0verFl0 buffer overflow, Factori-Os running product with repeated prime factors, BigMo%od CRT modulo reconstruction, KingOfTheHill three-phase hill climbing. crackers.js handles the 13 static models. Note: solver reliability at scale is untested — propagation is the real bottleneck.
+- **DarkNet worm stripped to 25KB** (imports only crackers.js, not helpers.js). Exec RAM dropped from ~17GB to ~6.5GB to fit within the 16GB limit on depth 0-5 darknet servers.
+- **Labyrinth solver.** BFS maze navigator using `dnet.authenticate()` with direction commands. Worm auto-deploys labyrinth.js to labyrinth servers upon auth.
+- **Headless.** No tail windows by default.
+- **Dark theme.** Paste `cyguin-theme.json` into Bitburner Settings → Theme Editor.
+- **Multiplier gating.** Stockmaster skips when API costs are absurd. Daemon gates bladeburner, hacknet, and corp internally.
+
+---
 
 ## limitations
 
@@ -35,12 +81,16 @@ Forked from [Alain Bryden's repo](https://github.com/alainbryden/bitburner-scrip
 - **BN13/14.** No per-BN strategy logic yet. BN13 runs on generic autopilot behavior, leaning on the shared Stanek's Gift handling (see the BN13 section); BN14 relies on `go.js` (driven by the daemon) for IPvGO — see the BN14 section. Both are in the default BN order.
 - **Darknet state corruption.** Rare save-game issue where `DarknetState` becomes corrupted. Only fix is an augment install to regenerate the network.
 
+---
+
 ## quick start
 
 ```
 run git-pull.js
 run autopilot.js
 ```
+
+---
 
 ## BN12 recursion
 
@@ -106,6 +156,8 @@ The autopilot detects darknet entry servers from home via `dnet.probe()`, authen
 
 If the player connects to a darknet server, the autopilot detects it and kills the daemon. All modals (casino, install countdowns, faction alerts) are suppressed during darknet play. When TRP is acquired from labyrinth, autopilot installs augments immediately — the check runs on every tick including the darknet path.
 
+---
+
 ## upstream vs fork
 
 Anything not listed here is **byte-for-byte [Alain Bryden's upstream code](https://github.com/alainbryden/bitburner-scripts)** — `daemon.js`, `helpers.js`, `faction-manager.js`, `work-for-factions.js`, `casino.js`, `stockmaster.js`, `gangs.js`, `bladeburner.js`, `sleeve.js`, `stanek.js`, `go.js`, `host-manager.js`, `ascend.js`, `hacknet-upgrade-manager.js`, `scan.js`, and everything under `Tasks/` and `Remote/`. Treat those as the unmodified foundation.
@@ -133,6 +185,8 @@ Cyguin's code begins at:
 | `download.js` | `raw.githubusercontent.com` downloader — no GitHub API, no rate limits; full-repo restore with no args. |
 | `cheat-tool.js` | Dev tool. Not for normal play. |
 | `cyguin-theme.json` | Dark theme; paste into Bitburner Settings → Theme Editor. |
+
+---
 
 ## credits
 
