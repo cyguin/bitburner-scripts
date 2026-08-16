@@ -7,11 +7,11 @@ Forked from [Alain Bryden's repo](https://github.com/alainbryden/bitburner-scrip
 - [done](#done)
 - [limitations](#limitations)
 - [quick start](#quick-start)
-- [BN15 darknet](#bn15-darknet)
 - [BN12 recursion](#bn12-recursion)
 - [running daemon directly at deep BN12](#running-daemon-directly-at-deep-bn12)
 - [BN13 (They're lunatics)](#bn13-theyre-lunatics)
 - [BN14 (IPvGO Subnet Takeover)](#bn14-ipvgo-subnet-takeover)
+- [BN15 darknet](#bn15-darknet)
 - [upstream vs fork](#upstream-vs-fork)
 - [credits](#credits)
 
@@ -41,17 +41,6 @@ Forked from [Alain Bryden's repo](https://github.com/alainbryden/bitburner-scrip
 run git-pull.js
 run autopilot.js
 ```
-
-## BN15 darknet
-
-The autopilot detects darknet entry servers from home via `dnet.probe()`, authenticates (entry servers are ZeroLogon), scps the worm files, and execs darknet.js on the entry host. The worm propagates by:
-
-1. `dnet.probe()` — find visible darknet neighbors
-2. `dnet.authenticate()` — crack password (interactive or static solver)
-3. `deployWorm()` — immediate SCP + exec to newly-authed server before mutation cycle disconnects it
-4. Each deployed copy opens `.cache` files, runs phishing attacks, and probes its own neighbors
-
-If the player connects to a darknet server, the autopilot detects it and kills the daemon. All modals (casino, install countdowns, faction alerts) are suppressed during darknet play. When TRP is acquired from labyrinth, autopilot installs augments immediately — the check runs on every tick including the darknet path.
 
 ## BN12 recursion
 
@@ -105,6 +94,17 @@ How autopilot handles it (no BN14-specific code — `go.js` is inherited from al
 The nerfs are real but not the worst: hacking level ×0.4, hacking speed ×0.3, hack income ×0.3, crime success ×0.4 — and, the brutal one, faction work rep ×0.2 (company rep ×0.2 too), so rep-gated augs come slow. Aug cost is ×1.5. Corporation (×0.4), bladeburner (×0.6), and gangs (×0.7) are all playable but not worth leaning on.
 
 SF14 rewards: level 1 doubles the stat-multiplier payoff of Node Power, level 2 unlocks the `go.cheat` API, level 3 adds +25% cheat success and raises the max Go favour. The default BN order plays 14.2 and 14.3 mid-order; `go.js` works from BN1.1 onward regardless, so the gift of SF14 just makes the already-running Go loop stronger.
+
+## BN15 darknet
+
+The autopilot detects darknet entry servers from home via `dnet.probe()`, authenticates (entry servers are ZeroLogon), scps the worm files, and execs darknet.js on the entry host. The worm propagates by:
+
+1. `dnet.probe()` — find visible darknet neighbors
+2. `dnet.authenticate()` — crack password (interactive or static solver)
+3. `deployWorm()` — immediate SCP + exec to newly-authed server before mutation cycle disconnects it
+4. Each deployed copy opens `.cache` files, runs phishing attacks, and probes its own neighbors
+
+If the player connects to a darknet server, the autopilot detects it and kills the daemon. All modals (casino, install countdowns, faction alerts) are suppressed during darknet play. When TRP is acquired from labyrinth, autopilot installs augments immediately — the check runs on every tick including the darknet path.
 
 ## upstream vs fork
 
