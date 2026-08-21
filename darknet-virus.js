@@ -2,6 +2,32 @@ import { getCandidates } from './crackers.js'
 
 const DB = '/data/dnet-passwords.txt';
 
+// Bump this whenever any worm file changes.
+//
+// exec() with preventDuplicates returns 0 when the script is already
+// running, so scp updates the file on disk while the live process
+// keeps executing whatever it started with. Without this the worm never
+// updates itself: a fix only reaches a host when its scripts happen to be
+// killed by a mutation, which is why an old solver can sit there re-sending
+// the same dead guess for hours after being replaced.
+//
+// Each instance re-reads its own source - already overwritten by scp - and
+// exits when the version on disk no longer matches the one it started with.
+// Restart comes from above: peers re-attempt their deploy every
+// DEPLOY_RETRY_CYCLES ticks, and autopilot.js redeploys from home whenever no
+// darknet.js is running on any reachable darknet host.
+//
+// ns.read and ns.getScriptName are both free, so this costs no RAM.
+const WORM_VERSION = 2;
+
+function isStale(ns) {
+    try {
+        const m = ns.read(ns.getScriptName()).match(/^const WORM_VERSION = (\d+)/m);
+        return !!m && Number(m[1]) !== WORM_VERSION;
+    } catch { return false; }
+}
+
+
 export async function main(ns) {
     ns.disableLog('ALL');
     let dnet;
@@ -12,6 +38,10 @@ export async function main(ns) {
     let lastHits = 0;
 
     while (true) {
+        if (isStale(ns)) {
+            ns.print(`newer darknet-virus.js on disk (was v${WORM_VERSION}) - exiting so it can start`);
+            return;
+        }
         try {
             const server = ns.getHostname();
             const neighbors = dnet.probe(false).filter(h => dnet.isDarknetServer(h));
